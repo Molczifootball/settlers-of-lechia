@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+
+# Game persistence (ephemeral, regenerated)
+server/rooms.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Env files
+.env
+.env.local
+
+# Claude / preview
+.claude/launch.json

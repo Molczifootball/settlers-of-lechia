@@ -1,0 +1,13 @@
+# Render.com blueprint — push to GitHub, then "New + Blueprint" in Render dashboard
+services:
+  - type: web
+    name: settlers-of-lechia
+    env: node
+    plan: free
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20
