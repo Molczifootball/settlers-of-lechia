@@ -6,6 +6,7 @@ const DEFAULTS = {
   sound: true,
   animations: true,
   colorblind: false,
+  viewMode: 'iso',     // 'flat' | 'iso'
 };
 
 export function loadSettings() {

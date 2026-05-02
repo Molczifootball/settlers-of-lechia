@@ -63,6 +63,9 @@ input:focus { border-color: #7b68ee; }
 .build-spot { animation: pulse 1.5s infinite; }
 .hex-tile { transition: stroke 0.15s, stroke-width 0.15s; }
 
+/* Smooth view-mode toggle */
+.iso-wrap, .iso-wrap > * { transition: transform 0.4s ease-out; }
+
 /* Disable all animations when settings.animations === false */
 body.no-anim *, body.no-anim *::before, body.no-anim *::after {
   animation-duration: 0s !important;

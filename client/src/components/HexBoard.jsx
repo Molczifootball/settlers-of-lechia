@@ -1,6 +1,7 @@
 import React from 'react';
 import { canPlaceSettlement, canPlaceRoad, canUpgradeToCity } from '../boardLogic';
 import { T, RES_NAMES } from '../i18n';
+import { loadSettings } from '../settings';
 
 // Probability dots for each token (out of 36 dice rolls)
 const TOKEN_PROB = { 2:'1/36', 3:'2/36', 4:'3/36', 5:'4/36', 6:'5/36', 8:'5/36', 9:'4/36', 10:'3/36', 11:'2/36', 12:'1/36' };
@@ -27,11 +28,47 @@ const PORT_ICONS = { '3:1':'⚓', wood:'🌲', brick:'🧱', sheep:'🐑', wheat
 
 const HEX_SIZE = 52;
 
-function hexPoints(cx, cy, size) {
+function hexCorners(cx, cy, size) {
   return Array.from({ length: 6 }, (_, i) => {
     const angle = (Math.PI / 180) * (60 * i - 30);
-    return `${cx + size * Math.cos(angle)},${cy + size * Math.sin(angle)}`;
-  }).join(' ');
+    return { x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) };
+  });
+}
+
+function hexPoints(cx, cy, size) {
+  return hexCorners(cx, cy, size).map(p => `${p.x},${p.y}`).join(' ');
+}
+
+// For iso, render a darker "rim" below each hex showing the 3 visible bottom faces.
+// Each rim quad has its own shade for a chiseled-rock look.
+function hexRim(cx, cy, size, depth) {
+  const top = hexCorners(cx, cy, size);
+  const bottom = top.map(p => ({ x: p.x, y: p.y + depth }));
+  const quads = [];
+  for (let i = 0; i < 6; i++) {
+    const a = top[i], b = top[(i + 1) % 6];
+    const c = bottom[(i + 1) % 6], d = bottom[i];
+    // Only render edges whose midpoint is BELOW center (visible from "above" the board)
+    const midY = (a.y + b.y) / 2;
+    if (midY > cy + 1) {
+      // Closer to bottom = darker. Edge at exactly center = lightest.
+      const verticalness = Math.min(1, (midY - cy) / size);
+      quads.push({
+        points: `${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y} ${d.x},${d.y}`,
+        verticalness,
+      });
+    }
+  }
+  return quads;
+}
+
+function darken(hex, factor = 0.7) {
+  const m = hex.match(/^#(..)(..)(..)$/);
+  if (!m) return hex;
+  const r = Math.round(parseInt(m[1], 16) * factor);
+  const g = Math.round(parseInt(m[2], 16) * factor);
+  const b = Math.round(parseInt(m[3], 16) * factor);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
 export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexClick, onEdgeClick }) {
@@ -74,9 +111,31 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
     });
   }
 
+  const settings = loadSettings();
+  const isoMode = settings.viewMode === 'iso';
+  const TILE_DEPTH = 22;
+  const Y_SQUASH = 0.62; // More pronounced "looking down at table" effect
+
+  const isoTransform = `translate(0, ${svgHeight * 0.18}) scale(1, ${Y_SQUASH})`;
+
   return (
-    <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ background:'#0a1733', borderRadius:12 }}>
+    <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+      style={{ background:'#0a1733', borderRadius:12, display:'block' }}>
       <rect width={svgWidth} height={svgHeight} fill="#0a1733" />
+      <g transform={isoMode ? isoTransform : ''}>
+
+      {/* Tile rims (iso depth) — drawn first so the top hex covers them properly */}
+      {isoMode && tiles.map(tile => {
+        const cx = tile.cx + offsetX, cy = tile.cy + offsetY;
+        const rims = hexRim(cx, cy, HEX_SIZE - 2, TILE_DEPTH);
+        const base = RESOURCE_COLORS[tile.resource];
+        return rims.map((rim, i) => (
+          <polygon key={`rim${tile.id}-${i}`} points={rim.points}
+            fill={darken(base, 0.55 - rim.verticalness * 0.2)}
+            stroke="#0a1733" strokeWidth={0.5}
+            pointerEvents="none" />
+        ));
+      })}
 
       {/* Tiles */}
       {tiles.map(tile => {
@@ -221,6 +280,7 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
         }
         return null;
       })}
+      </g>
     </svg>
   );
 }

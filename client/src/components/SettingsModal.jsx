@@ -70,6 +70,14 @@ export default function SettingsModal({ onClose }) {
         <Toggle value={settings.colorblind} onChange={v => update({ colorblind: v })} />
       </div>
 
+      <div style={s.row}>
+        <span style={s.label}>🎲 {T.labels.viewMode}</span>
+        <div style={s.langRow}>
+          <button style={s.langBtn(settings.viewMode === 'flat')} onClick={() => update({ viewMode:'flat' })}>{T.labels.viewFlat}</button>
+          <button style={s.langBtn(settings.viewMode === 'iso')} onClick={() => update({ viewMode:'iso' })}>{T.labels.viewIso}</button>
+        </div>
+      </div>
+
       {reloadHint && (
         <div style={s.hint}>
           {T.msgs.languageChangeReload}{' '}

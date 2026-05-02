@@ -25,6 +25,7 @@ const PL = {
     give:'Daję', want:'Chcę', to:'Do', everyone:'Wszystkich',
     chat:'Czat', language:'Język', sound:'Dźwięki', animations:'Animacje',
     colorblind:'Tryb Daltonisty', yourHand:'Twoja Ręka', or:'lub',
+    viewMode:'Widok', viewFlat:'Płaski', viewIso:'Izometryczny',
   },
   msgs: {
     placeSettlement:'Wybierz miejsce na osadę',
@@ -73,6 +74,7 @@ const EN = {
     give:'Give', want:'Want', to:'To', everyone:'Everyone',
     chat:'Chat', language:'Language', sound:'Sound', animations:'Animations',
     colorblind:'Color-blind Mode', yourHand:'Your Hand', or:'or',
+    viewMode:'Board View', viewFlat:'Flat', viewIso:'Isometric',
   },
   msgs: {
     placeSettlement:'Click a vertex to place a settlement',
