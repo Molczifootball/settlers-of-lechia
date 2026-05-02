@@ -20,6 +20,7 @@ const s = {
   ratio: { fontSize:11, color:'#aaa' },
 };
 
+// Generic 1-step picker (player trades, want side of bank)
 function ResourcePicker({ values, onChange, max, ratios }) {
   return (
     <>
@@ -42,6 +43,38 @@ function ResourcePicker({ values, onChange, max, ratios }) {
           </div>
         </div>
       ))}
+    </>
+  );
+}
+
+// Bank-give picker: clicking +/- adds/removes the resource's RATIO so values
+// always stay valid multiples (e.g. clicking + on wood with 4:1 adds 4).
+function BankGivePicker({ values, onChange, max, ratios }) {
+  return (
+    <>
+      {RES.map(r => {
+        const ratio = ratios?.[r] || 4;
+        const cur = values[r] || 0;
+        const have = max?.[r] || 0;
+        const canInc = cur + ratio <= have;
+        return (
+          <div key={r} style={s.resRow}>
+            <div>{ICONS[r]}</div>
+            <div style={s.resLabel}>
+              {RES_NAMES[r]} <span style={s.ratio}>({ratio}:1)</span>
+              <span style={s.ratio}> have {have}</span>
+            </div>
+            <div style={s.ctrl}>
+              <button style={s.ctrlBtn}
+                onClick={() => onChange({ ...values, [r]: Math.max(0, cur - ratio) })}>−</button>
+              <div style={s.count}>{cur}</div>
+              <button style={s.ctrlBtn}
+                disabled={!canInc}
+                onClick={() => canInc && onChange({ ...values, [r]: cur + ratio })}>+</button>
+            </div>
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -73,10 +106,7 @@ export default function TradePanel({ state, me, isMyTurn, hasRolled, roomId }) {
   function reset() { setGive({}); setWant({}); setOpen(null); setTarget('all'); }
 
   function bankTrade() {
-    const giveRes = Object.entries(give).find(([, n]) => n > 0)?.[0];
-    const wantRes = Object.entries(want).find(([, n]) => n > 0)?.[0];
-    if (!giveRes || !wantRes) return alert('Select what to give and what to want');
-    socket.emit('game:bankTrade', { roomId, give: giveRes, want: wantRes }, (res) => {
+    socket.emit('game:bankTrade', { roomId, give, want }, (res) => {
       if (res?.error) alert(res.error);
       else reset();
     });
@@ -105,27 +135,43 @@ export default function TradePanel({ state, me, isMyTurn, hasRolled, roomId }) {
         </button>
       </div>
 
-      {open === 'bank' && (
-        <Modal title={`🏦 ${T.actions.bankTrade}`} onClose={reset}>
-          <div style={s.label}>{T.labels.give} ({bankRatios[Object.keys(give).find(k => give[k] > 0)] || '?'}:1)</div>
-          <ResourcePicker values={give} onChange={(v) => {
-            // single-resource selection
-            const lastChanged = Object.keys(v).find(k => (v[k] || 0) > (give[k] || 0));
-            if (lastChanged) setGive({ [lastChanged]: bankRatios[lastChanged] });
-            else setGive(v);
-          }} max={me.resources} ratios={bankRatios} />
-          <div style={s.label}>{T.labels.want}</div>
-          <ResourcePicker values={want} onChange={(v) => {
-            const lastChanged = Object.keys(v).find(k => (v[k] || 0) > (want[k] || 0));
-            if (lastChanged) setWant({ [lastChanged]: 1 });
-            else setWant(v);
-          }} />
-          <div style={{ display:'flex', gap:8, marginTop:12 }}>
-            <button style={{ ...s.btn('#7b68ee'), flex:1, padding:10 }} onClick={bankTrade}>{T.actions.confirm}</button>
-            <button style={{ ...s.btn('#444'), flex:1, padding:10 }} onClick={reset}>{T.actions.cancel}</button>
-          </div>
-        </Modal>
-      )}
+      {open === 'bank' && (() => {
+        const giveUnits = Object.entries(give).reduce((sum, [r, n]) => {
+          const ratio = bankRatios[r] || 4;
+          return sum + (n > 0 && n % ratio === 0 ? n / ratio : 0);
+        }, 0);
+        const wantUnits = Object.values(want).reduce((a, b) => a + (b > 0 ? b : 0), 0);
+        const balanced = giveUnits > 0 && giveUnits === wantUnits;
+        const diff = giveUnits - wantUnits;
+        return (
+          <Modal title={`🏦 ${T.actions.bankTrade}`} onClose={reset}>
+            <div style={s.label}>{T.labels.give}</div>
+            <BankGivePicker values={give} onChange={setGive} max={me.resources} ratios={bankRatios} />
+            <div style={s.label}>{T.labels.want}</div>
+            <ResourcePicker values={want} onChange={setWant} />
+
+            <div style={{
+              padding:'8px 10px', background: balanced ? '#1e3d2e' : '#2a2a3e',
+              border: `2px solid ${balanced ? '#2ecc71' : '#444'}`,
+              borderRadius:6, marginTop:10, fontSize:12, textAlign:'center', fontWeight:700,
+            }}>
+              {balanced
+                ? `✓ Balanced: ${giveUnits} ↔ ${wantUnits}`
+                : giveUnits === 0 && wantUnits === 0
+                  ? 'Pick what to give and want'
+                  : diff > 0
+                    ? `Give ${diff} more want unit${diff > 1 ? 's' : ''} or remove ${diff * (bankRatios[Object.keys(give).find(k => give[k] > 0)] || 4)} resource${diff > 1 ? 's' : ''} from give`
+                    : `Need ${-diff} more want unit${-diff > 1 ? 's' : ''}`}
+            </div>
+
+            <div style={{ display:'flex', gap:8, marginTop:12 }}>
+              <button style={{ ...s.btn('#7b68ee'), flex:1, padding:10, opacity: balanced ? 1 : 0.5 }}
+                disabled={!balanced} onClick={bankTrade}>{T.actions.confirm}</button>
+              <button style={{ ...s.btn('#444'), flex:1, padding:10 }} onClick={reset}>{T.actions.cancel}</button>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {open === 'player' && (
         <Modal title="🤝 Trade with Players" onClose={reset}>

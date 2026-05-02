@@ -398,7 +398,11 @@ function handleMoveRobber(roomId, socketId, { tileId, stealFromId }) {
   return { state };
 }
 
-// Bank trade with port-aware ratios
+// Bank trade with port-aware ratios. Accepts multi-resource give/want.
+//   give = { wood: 8, sheep: 4 }  (counts must be multiples of each resource's ratio)
+//   want = { wheat: 2, brick: 1 }
+//   Total give units (count/ratio) must equal total want.
+// Backward-compat: if give/want are strings, treat as old single-resource form.
 function handleBankTrade(roomId, socketId, { give, want }) {
   const room = rooms.get(roomId);
   if (!room?.state) return { error: 'No active game' };
@@ -409,11 +413,43 @@ function handleBankTrade(roomId, socketId, { give, want }) {
   if (state.diceRoll === null) return { error: 'Must roll first' };
   if (state.pendingAction) return { error: 'Resolve pending action first' };
 
-  const ratio = getBankRatio(state, cur, give);
-  if ((cur.resources[give] || 0) < ratio) return { error: `Need ${ratio} ${give}` };
-  cur.resources[give] -= ratio;
-  cur.resources[want] = (cur.resources[want] || 0) + 1;
-  state.log.unshift(`${cur.name} traded ${ratio} ${give} for 1 ${want} (bank)`);
+  // Normalize to objects
+  if (typeof give === 'string') give = { [give]: getBankRatio(state, cur, give) };
+  if (typeof want === 'string') want = { [want]: 1 };
+  if (!give || !want) return { error: 'Invalid trade' };
+
+  // Validate give: each resource amount must be a positive multiple of its ratio
+  let giveUnits = 0;
+  for (const [r, n] of Object.entries(give)) {
+    if (!n) continue;
+    if (n < 0) return { error: 'Invalid give amount' };
+    const ratio = getBankRatio(state, cur, r);
+    if (n % ratio !== 0) return { error: `${r}: amount must be multiple of ${ratio}` };
+    if ((cur.resources[r] || 0) < n) return { error: `Not enough ${r}` };
+    giveUnits += n / ratio;
+  }
+
+  // Validate want
+  let wantUnits = 0;
+  for (const [r, n] of Object.entries(want)) {
+    if (!n) continue;
+    if (n < 0) return { error: 'Invalid want amount' };
+    wantUnits += n;
+  }
+
+  if (giveUnits === 0 || wantUnits === 0) return { error: 'Empty trade' };
+  if (giveUnits !== wantUnits) return { error: `Unbalanced: giving ${giveUnits} units for ${wantUnits}` };
+
+  // Execute
+  for (const [r, n] of Object.entries(give)) {
+    if (n > 0) cur.resources[r] -= n;
+  }
+  for (const [r, n] of Object.entries(want)) {
+    if (n > 0) cur.resources[r] = (cur.resources[r] || 0) + n;
+  }
+
+  const fmt = (obj) => Object.entries(obj).filter(([, n]) => n > 0).map(([r, n]) => `${n}${r[0].toUpperCase()}`).join('+');
+  state.log.unshift(`${cur.name} bank: ${fmt(give)} → ${fmt(want)}`);
   persist();
   return { state };
 }
