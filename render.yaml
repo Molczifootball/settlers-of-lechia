@@ -1,4 +1,4 @@
-# Render.com blueprint — push to GitHub, then "New + Blueprint" in Render dashboard
+# Render.com blueprint
 services:
   - type: web
     name: settlers-of-lechia
@@ -7,7 +7,8 @@ services:
     buildCommand: npm run install:all && npm run build
     startCommand: npm start
     envVars:
-      - key: NODE_ENV
-        value: production
+      # Force npm to install devDependencies during build (vite is a devDep).
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: NODE_VERSION
-        value: 20
+        value: "20"
