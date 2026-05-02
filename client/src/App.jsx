@@ -11,7 +11,6 @@ import TradeOfferModal from './components/TradeOfferModal';
 import DiscardModal from './components/DiscardModal';
 import StealModal from './components/StealModal';
 import EndGameScreen from './components/EndGameScreen';
-import CostReference from './components/CostReference';
 import ResourceCards from './components/ResourceCards';
 import SettingsModal from './components/SettingsModal';
 import ChatPanel from './components/ChatPanel';
@@ -234,7 +233,6 @@ function GameView() {
           largestArmyHolder={gameState.largestArmyHolder}
           longestRoadHolder={gameState.longestRoadHolder}
         />
-        <CostReference />
       </div>
 
       <div style={s.boardSection} className="board-section">
@@ -263,19 +261,20 @@ function GameView() {
       </div>
 
       <div style={s.sideSection} className="side-section">
+        {!inSetup && !isSpectator && (
+          <BuildMenu
+            player={me}
+            isMyTurn={isMyTurn}
+            hasRolled={hasRolled}
+            mode={buildMode}
+            setMode={setBuildMode}
+            onBuyDevCard={buyDevCard}
+            pendingAction={gameState.pendingAction}
+          />
+        )}
         <GameControls state={gameState} roomId={roomId} myId={myId} isSpectator={isSpectator} />
-        <ChatPanel roomId={roomId} myName={myName} />
         {!inSetup && !isSpectator && (
           <>
-            <BuildMenu
-              player={me}
-              isMyTurn={isMyTurn}
-              hasRolled={hasRolled}
-              mode={buildMode}
-              setMode={setBuildMode}
-              onBuyDevCard={buyDevCard}
-              pendingAction={gameState.pendingAction}
-            />
             <TradePanel
               state={gameState}
               me={me}
@@ -293,6 +292,7 @@ function GameView() {
             />
           </>
         )}
+        <ChatPanel roomId={roomId} myName={myName} />
       </div>
 
       {/* Modals */}

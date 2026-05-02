@@ -71,11 +71,8 @@ export default function SettingsModal({ onClose }) {
       </div>
 
       <div style={s.row}>
-        <span style={s.label}>🎲 {T.labels.viewMode}</span>
-        <div style={s.langRow}>
-          <button style={s.langBtn(settings.viewMode === 'flat')} onClick={() => update({ viewMode:'flat' })}>{T.labels.viewFlat}</button>
-          <button style={s.langBtn(settings.viewMode === 'iso')} onClick={() => update({ viewMode:'iso' })}>{T.labels.viewIso}</button>
-        </div>
+        <span style={s.label}>🎲 {T.labels.viewIso}</span>
+        <Toggle value={settings.viewMode === 'iso'} onChange={v => update({ viewMode: v ? 'iso' : 'flat' })} />
       </div>
 
       {reloadHint && (

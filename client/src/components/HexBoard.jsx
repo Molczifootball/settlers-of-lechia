@@ -1,7 +1,7 @@
 import React from 'react';
 import { canPlaceSettlement, canPlaceRoad, canUpgradeToCity } from '../boardLogic';
 import { T, RES_NAMES } from '../i18n';
-import { loadSettings } from '../settings';
+import { useSettings } from '../settings';
 
 // Probability dots for each token (out of 36 dice rolls)
 const TOKEN_PROB = { 2:'1/36', 3:'2/36', 4:'3/36', 5:'4/36', 6:'5/36', 8:'5/36', 9:'4/36', 10:'3/36', 11:'2/36', 12:'1/36' };
@@ -111,7 +111,7 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
     });
   }
 
-  const settings = loadSettings();
+  const settings = useSettings();
   const isoMode = settings.viewMode === 'iso';
   const TILE_DEPTH = 22;
   const Y_SQUASH = 0.62; // More pronounced "looking down at table" effect
