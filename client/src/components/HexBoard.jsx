@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { canPlaceSettlement, canPlaceRoad, canUpgradeToCity } from '../boardLogic';
 import { T, RES_NAMES } from '../i18n';
 import { useSettings } from '../settings';
@@ -83,8 +83,8 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
     (p.roads || []).forEach(e => { edgeOwner[e] = { color: p.color }; });
   });
 
-  const svgWidth = 580, svgHeight = 520;
-  const offsetX = 30, offsetY = 20;
+  const svgWidth = 540, svgHeight = 480;
+  const offsetX = 10, offsetY = 0;
 
   const inSetup = state.phase === 'setup1' || state.phase === 'setup2';
   const showSettlementSpots = mode === 'settlement';
@@ -114,15 +114,88 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
   const settings = useSettings();
   const isoMode = settings.viewMode === 'iso';
   const TILE_DEPTH = 22;
-  const Y_SQUASH = 0.62; // More pronounced "looking down at table" effect
+  const Y_SQUASH = 0.62;
 
   const isoTransform = `translate(0, ${svgHeight * 0.18}) scale(1, ${Y_SQUASH})`;
 
+  // Zoom + pan state — allows the user to zero in on parts of the board.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+
+  const vbW = svgWidth / zoom;
+  const vbH = svgHeight / zoom;
+  const vbX = (svgWidth - vbW) / 2 - pan.x;
+  const vbY = (svgHeight - vbH) / 2 - pan.y;
+  const dynamicViewBox = `${vbX} ${vbY} ${vbW} ${vbH}`;
+
+  const zoomIn = () => setZoom(z => Math.min(z * 1.2, 3));
+  const zoomOut = () => setZoom(z => Math.max(z / 1.2, 0.6));
+  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn();
+    else zoomOut();
+  };
+
+  // Drag to pan — only when not in any build-mode (so clicks still work for placement)
+  const canPan = !showSettlementSpots && !showCitySpots && !showRoadSpots && !showRobberSpots;
+
+  const onMouseDown = (e) => {
+    if (!canPan || e.button !== 0) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, moved: false };
+  };
+  const onMouseMove = (e) => {
+    if (!dragRef.current) return;
+    const d = dragRef.current;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+    // Convert pixel delta to viewBox units (account for displayed-vs-viewBox ratio + zoom)
+    setPan({ x: d.panX + dx / zoom, y: d.panY + dy / zoom });
+  };
+  const onMouseUp = () => { dragRef.current = null; };
+
   return (
-    <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-      style={{ background:'#0a1733', borderRadius:12, display:'block' }}>
-      <rect width={svgWidth} height={svgHeight} fill="#0a1733" />
-      <g transform={isoMode ? isoTransform : ''}>
+    <div style={{ position:'relative', width:'100%', height:'100%',
+      flex:1,
+      display:'flex', alignItems:'center', justifyContent:'center',
+      minHeight:0 }}>
+    <svg
+      viewBox={dynamicViewBox}
+      preserveAspectRatio="xMidYMid meet"
+      onWheel={onWheel}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      style={{
+        background:'#0a1733', borderRadius:8, display:'block',
+        width: '100%', height: '100%',
+        maxWidth: '100%', maxHeight: '100%',
+        cursor: dragRef.current?.moved ? 'grabbing' : (canPan ? 'grab' : 'default'),
+      }}>
+      <defs>
+        <filter id="boardShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="4" />
+          <feOffset dx="0" dy="6" />
+          <feComponentTransfer><feFuncA type="linear" slope="0.5" /></feComponentTransfer>
+          <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        {/* One clip-path per tile, hex-shaped at that tile's position. Used to mask painted PNGs into hex shape. */}
+        {tiles.map(tile => (
+          <clipPath key={`clip-${tile.id}`} id={`hexClip-${tile.id}`}>
+            <polygon points={hexPoints(tile.cx + offsetX, tile.cy + offsetY, HEX_SIZE - 2)} />
+          </clipPath>
+        ))}
+      </defs>
+      <image href="/assets/ui/bg_board_water.png"
+        x={0} y={0} width={svgWidth} height={svgHeight}
+        preserveAspectRatio="xMidYMid slice"
+        pointerEvents="none" />
+      <g transform={isoMode ? isoTransform : ''}
+         filter={isoMode ? 'url(#boardShadow)' : undefined}>
 
       {/* Tile rims (iso depth) — drawn first so the top hex covers them properly */}
       {isoMode && tiles.map(tile => {
@@ -137,31 +210,41 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
         ));
       })}
 
-      {/* Tiles */}
+      {/* Tiles — painted PNG clipped to hex shape, with stroke polygon overlay for click detection */}
       {tiles.map(tile => {
         const isCurrentRobberTile = tile.id === state.robberTile;
         const tileClickable = showRobberSpots && !isCurrentRobberTile;
+        const cx = tile.cx + offsetX, cy = tile.cy + offsetY;
+        const imgSize = HEX_SIZE * 2.1; // slight overlap so the painted edge fully covers the hex
         return (
         <g key={`t${tile.id}`} onClick={() => tileClickable && onTileClick?.(tile.id)}
-           style={{ cursor: tileClickable ? 'pointer' : 'default' }}>
+           style={{ cursor: tileClickable ? 'pointer' : 'default' }}
+           opacity={showRobberSpots && isCurrentRobberTile ? 0.5 : 1}>
           <title>{tileTooltip(tile, tile.id === state.robberTile)}</title>
+          {/* Painted PNG, clipped to hex */}
+          <image
+            href={`/assets/tiles/tile_${tile.resource}.png`}
+            x={cx - imgSize / 2}
+            y={cy - imgSize / 2}
+            width={imgSize}
+            height={imgSize}
+            preserveAspectRatio="xMidYMid slice"
+            clipPath={`url(#hexClip-${tile.id})`}
+            pointerEvents="none"
+          />
+          {/* Polygon for stroke + click target (transparent fill so painting shows through) */}
           <polygon
-            points={hexPoints(tile.cx + offsetX, tile.cy + offsetY, HEX_SIZE - 2)}
-            fill={RESOURCE_COLORS[tile.resource]}
+            points={hexPoints(cx, cy, HEX_SIZE - 2)}
+            fill="transparent"
             stroke={tileClickable ? '#fff' : '#1a1a2e'}
             strokeWidth={tileClickable ? 3 : 2}
             className="hex-tile"
-            opacity={showRobberSpots && isCurrentRobberTile ? 0.5 : 1}
           />
-          <text x={tile.cx + offsetX} y={tile.cy + offsetY - 8} textAnchor="middle"
-                fontSize={18} style={{ userSelect:'none', pointerEvents:'none' }}>
-            {RESOURCE_ICONS[tile.resource]}
-          </text>
           {tile.token && (
             <>
-              <circle cx={tile.cx + offsetX} cy={tile.cy + offsetY + 10} r={13} fill="#f5e6c8" pointerEvents="none" />
-              <text x={tile.cx + offsetX} y={tile.cy + offsetY + 15} textAnchor="middle"
-                fontSize={12} fontWeight="bold"
+              <circle cx={cx} cy={cy + 14} r={13} fill="#f5e6c8" stroke="#0a1733" strokeWidth={1} pointerEvents="none" />
+              <text x={cx} y={cy + 19} textAnchor="middle"
+                fontSize={13} fontWeight="bold"
                 fill={tile.token === 6 || tile.token === 8 ? '#c0392b' : '#222'}
                 style={{ userSelect:'none', pointerEvents:'none' }}>
                 {tile.token}
@@ -169,8 +252,10 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
             </>
           )}
           {tile.id === state.robberTile && (
-            <text x={tile.cx + offsetX} y={tile.cy + offsetY + 32} textAnchor="middle"
-              fontSize={20} pointerEvents="none">🦹</text>
+            <image href="/assets/tokens/token_robber.png"
+              x={cx - 22} y={cy - 32}
+              width={44} height={44}
+              pointerEvents="none" />
           )}
         </g>
         );
@@ -193,11 +278,13 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
             <title>{portTooltip(port)}</title>
             <line x1={v1.x + offsetX} y1={v1.y + offsetY} x2={cx} y2={cy} stroke="#f5e6c8" strokeWidth={1.5} strokeDasharray="3,2" opacity={0.5} pointerEvents="none" />
             <line x1={v2.x + offsetX} y1={v2.y + offsetY} x2={cx} y2={cy} stroke="#f5e6c8" strokeWidth={1.5} strokeDasharray="3,2" opacity={0.5} pointerEvents="none" />
-            <circle cx={cx} cy={cy} r={13} fill="#f5e6c8" stroke="#7b68ee" strokeWidth={2} />
-            <text x={cx} y={cy + 4} textAnchor="middle" fontSize={13} pointerEvents="none">
-              {PORT_ICONS[port.type] || '?'}
-            </text>
-            <text x={cx} y={cy + 22} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold" pointerEvents="none">
+            <image
+              href={`/assets/ports/port_${port.type === '3:1' ? '3to1' : port.type}.png`}
+              x={cx - 16} y={cy - 16}
+              width={32} height={32}
+              pointerEvents="none" />
+            <text x={cx} y={cy + 26} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold"
+              stroke="#0a1733" strokeWidth={2} paintOrder="stroke" pointerEvents="none">
               {port.type === '3:1' ? '3:1' : '2:1'}
             </text>
           </g>
@@ -240,25 +327,42 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
         const owner = vertexOwner[v.id];
         const x = v.x + offsetX, y = v.y + offsetY;
         const cityUpgradeable = showCitySpots && owner?.kind === 'settlement' && validVertices.has(v.id);
+        // In iso mode, "lift" buildings off the board for a 3D-pillar effect
+        const lift = isoMode ? 12 : 0;
 
         if (owner) {
           const interactive = cityUpgradeable;
           const handler = interactive ? () => onVertexClick?.(v.id) : undefined;
           const cursor = interactive ? 'pointer' : 'default';
-          const piece = owner.kind === 'settlement' ? (
-            <polygon
-              points={`${x-8},${y+6} ${x-8},${y-3} ${x},${y-10} ${x+8},${y-3} ${x+8},${y+6}`}
-              fill={COLOR_MAP[owner.color]} stroke="#1a1a2e" strokeWidth={1.5}
-              className="placed-piece"
-              style={{ cursor }}
-              onClick={handler}
-              pointerEvents={interactive ? 'auto' : 'none'} />
-          ) : (
-            <rect x={x-10} y={y-10} width={20} height={20}
-              fill={COLOR_MAP[owner.color]} stroke="#1a1a2e" strokeWidth={1.5}
-              rx={2} className="placed-piece"
-              pointerEvents="none" />
-          );
+          const baseColor = COLOR_MAP[owner.color];
+          const sideColor = darken(baseColor, 0.6);
+          let piece;
+          if (owner.kind === 'settlement') {
+            piece = (
+              <g style={{ cursor }} onClick={handler} pointerEvents={interactive ? 'auto' : 'none'} className="placed-piece">
+                {isoMode && (
+                  <polygon
+                    points={`${x-8},${y+6} ${x-8},${y+6+lift} ${x+8},${y+6+lift} ${x+8},${y+6}`}
+                    fill={sideColor} stroke="#1a1a2e" strokeWidth={1} />
+                )}
+                <polygon
+                  points={`${x-8},${y+6-lift} ${x-8},${y-3-lift} ${x},${y-10-lift} ${x+8},${y-3-lift} ${x+8},${y+6-lift}`}
+                  fill={baseColor} stroke="#1a1a2e" strokeWidth={1.5} />
+              </g>
+            );
+          } else {
+            // City: taller, with visible side
+            piece = (
+              <g pointerEvents="none" className="placed-piece">
+                {isoMode && (
+                  <rect x={x-10} y={y+10} width={20} height={lift}
+                    fill={sideColor} stroke="#1a1a2e" strokeWidth={1} />
+                )}
+                <rect x={x-10} y={y-10-lift} width={20} height={20}
+                  fill={baseColor} stroke="#1a1a2e" strokeWidth={1.5} rx={2} />
+              </g>
+            );
+          }
           return (
             <g key={`v${v.id}`}>
               {cityUpgradeable && (
@@ -282,5 +386,26 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
       })}
       </g>
     </svg>
+    <div style={{
+      position:'absolute', top:8, right:8, display:'flex', flexDirection:'column', gap:4,
+      background:'#0f3460cc', borderRadius:8, padding:4, backdropFilter:'blur(4px)',
+    }}>
+      <button onClick={zoomIn} title="Zoom in"
+        style={{ width:28, height:28, padding:0, fontSize:16, fontWeight:800, background:'#1a2e54', color:'#fff' }}>+</button>
+      <button onClick={zoomOut} title="Zoom out"
+        style={{ width:28, height:28, padding:0, fontSize:16, fontWeight:800, background:'#1a2e54', color:'#fff' }}>−</button>
+      <button onClick={resetView} title="Reset view"
+        style={{ width:28, height:28, padding:0, fontSize:13, background:'#1a2e54', color:'#fff' }}>⟳</button>
+    </div>
+    {(zoom !== 1 || pan.x !== 0 || pan.y !== 0) && (
+      <div style={{
+        position:'absolute', bottom:8, right:8,
+        background:'#0f3460cc', borderRadius:6, padding:'4px 8px',
+        fontSize:11, color:'#aaa',
+      }}>
+        {Math.round(zoom * 100)}%
+      </div>
+    )}
+    </div>
   );
 }

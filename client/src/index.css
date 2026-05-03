@@ -1,11 +1,27 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-body {
+html, body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #1a1a2e;
   color: #eee;
-  min-height: 100vh;
 }
+
+/* Wide screens: lock to viewport, no scroll */
+@media (min-width: 1101px) {
+  html, body { height: 100vh; overflow: hidden; }
+  #root { height: 100vh; }
+  .app-outer { height: 100vh; overflow: hidden; }
+}
+
+/* Narrow screens: regular page scroll */
+@media (max-width: 1100px) {
+  html, body { min-height: 100vh; }
+}
+
+/* Allow scrolling inside scrollable panels only */
+.scrollable { overflow-y: auto; }
+.scrollable::-webkit-scrollbar { width: 6px; }
+.scrollable::-webkit-scrollbar-thumb { background: #2a3a5e; border-radius: 3px; }
 
 button {
   cursor: pointer;
@@ -66,6 +82,33 @@ input:focus { border-color: #7b68ee; }
 /* Smooth view-mode toggle */
 .iso-wrap, .iso-wrap > * { transition: transform 0.4s ease-out; }
 
+@keyframes resourceFloat {
+  0%   { opacity: 0; transform: translateY(40px) scale(0.6); }
+  20%  { opacity: 1; transform: translateY(0) scale(1.1); }
+  60%  { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.95); }
+}
+
+@keyframes turnPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--turn-color, #7b68ee); }
+  50%      { box-shadow: 0 0 0 4px var(--turn-color, #7b68ee); }
+}
+
+@keyframes affordGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); }
+  50%      { box-shadow: 0 0 12px 2px rgba(241, 196, 15, 0.5); }
+}
+
+.active-turn { animation: turnPulse 2s ease-in-out infinite; }
+.afford-glow { animation: affordGlow 1.8s ease-in-out infinite; border-color: rgba(241, 196, 15, 0.4) !important; }
+
+@keyframes vpFlash {
+  0% { transform: scale(1); color: #f1c40f; }
+  50% { transform: scale(1.5); color: #fff; text-shadow: 0 0 12px #f1c40f; }
+  100% { transform: scale(1); color: #f1c40f; }
+}
+.vp-flash { animation: vpFlash 0.6s ease-out; display: inline-block; }
+
 /* Disable all animations when settings.animations === false */
 body.no-anim *, body.no-anim *::before, body.no-anim *::after {
   animation-duration: 0s !important;
@@ -85,30 +128,18 @@ body.colorblind svg rect[fill="#2ecc71"] { fill: #cc79a7 !important; }
 body.colorblind svg polygon[fill="#f39c12"],
 body.colorblind svg rect[fill="#f39c12"] { fill: #f0e442 !important; }
 
-/* Mobile responsiveness */
-@media (max-width: 1024px) {
+/* Below 1100px: stack columns and allow body scroll */
+@media (max-width: 1100px) {
+  html, body { overflow: auto; height: auto; min-height: 100vh; }
+  #root { height: auto; min-height: 100vh; }
   .game-wrap {
-    padding: 8px !important;
-    gap: 8px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
   }
-  .side-section {
-    width: 100% !important;
-    max-width: 540px;
-  }
-  .board-section {
-    width: 100%;
-    overflow-x: auto;
-  }
-  .board-section svg {
-    width: 100%;
-    height: auto;
-    max-width: 580px;
-  }
+  .side-section { width: 100% !important; max-width: 600px; margin: 0 auto; min-height: auto !important; }
+  .board-section { width: 100%; max-width: 600px !important; margin: 0 auto; }
 }
 
 @media (max-width: 600px) {
   body { font-size: 13px; }
-  .side-section > * {
-    padding: 10px !important;
-  }
 }

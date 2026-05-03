@@ -51,13 +51,30 @@ function sanitizeFor(state, viewerId) {
 function broadcastState(roomId) {
   const room = RM.getRoom(roomId);
   if (!room?.state) return;
-  // Send personalized state to each socket in the room
   io.in(roomId).fetchSockets().then(sockets => {
     sockets.forEach(s => {
       s.emit('game:stateUpdate', { state: sanitizeFor(room.state, s.id) });
     });
   });
 }
+
+// Turn timer — auto-skip after TURN_TIMEOUT_MS if active player is idle
+const TURN_TIMEOUT_MS = 120 * 1000;
+setInterval(() => {
+  RM.listRooms().forEach((room, roomId) => {
+    const state = room.state;
+    if (!state || state.winner) return;
+    if (state.phase !== 'main' || !state.turnStart) return;
+    const cur = state.players[state.turn];
+    if (!cur || cur.isBot) return;
+    const elapsed = Date.now() - state.turnStart;
+    if (elapsed > TURN_TIMEOUT_MS) {
+      console.log(`[timer] auto-ending turn in ${roomId} for ${cur.name}`);
+      const r = RM.handleEndTurn(roomId, cur.id, { force: true });
+      if (!r.error) broadcastState(roomId);
+    }
+  });
+}, 5000);
 
 // Drive bots (poll-based after each state change)
 function driveBots(roomId) {
@@ -131,10 +148,15 @@ function driveBots(roomId) {
 io.on('connection', (socket) => {
   console.log(`[+] ${socket.id}`);
 
-  socket.on('room:create', ({ playerName }, cb) => {
-    const room = RM.createRoom(socket, playerName);
+  socket.on('room:create', ({ playerName, isPublic }, cb) => {
+    const room = RM.createRoom(socket, playerName, { isPublic });
     socket.join(room.id);
-    cb({ roomId: room.id, players: room.players });
+    cb({ roomId: room.id, players: room.players, isPublic: room.isPublic });
+    if (room.isPublic) io.emit('lobby:publicRooms', RM.listPublicRooms());
+  });
+
+  socket.on('lobby:listPublic', (_, cb) => {
+    cb({ rooms: RM.listPublicRooms() });
   });
 
   socket.on('room:join', ({ roomId, playerName }, cb) => {
@@ -151,6 +173,7 @@ io.on('connection', (socket) => {
     } else {
       cb({ roomId, players: r.room.players });
       io.to(roomId).emit('room:updated', { players: r.room.players });
+      if (r.room.isPublic) io.emit('lobby:publicRooms', RM.listPublicRooms());
     }
   });
 
@@ -169,6 +192,8 @@ io.on('connection', (socket) => {
     });
     cb({ ok: true });
     driveBots(roomId);
+    // Started rooms drop off the public list
+    io.emit('lobby:publicRooms', RM.listPublicRooms());
   });
 
   function ack(roomId, r, cb) {
@@ -189,6 +214,7 @@ io.on('connection', (socket) => {
   socket.on('game:proposeTrade', ({ roomId, give, want, toPlayerId }, cb) => ack(roomId, RM.handleProposeTrade(roomId, socket.id, { give, want, toPlayerId }), cb));
   socket.on('game:respondTrade', ({ roomId, accept }, cb) => ack(roomId, RM.handleRespondTrade(roomId, socket.id, { accept }), cb));
   socket.on('game:cancelTrade',  ({ roomId }, cb) => ack(roomId, RM.handleCancelTrade(roomId, socket.id), cb));
+  socket.on('game:counterTrade', ({ roomId, give, want }, cb) => ack(roomId, RM.handleCounterTrade(roomId, socket.id, { give, want }), cb));
 
   socket.on('chat:send', ({ roomId, message }, cb) => {
     const room = RM.getRoom(roomId);

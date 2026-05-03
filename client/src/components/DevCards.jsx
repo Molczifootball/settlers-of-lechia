@@ -15,16 +15,30 @@ const RESOURCES = ['wood', 'brick', 'sheep', 'wheat', 'ore'];
 const RES_ICONS = { wood:'🌲', brick:'🧱', sheep:'🐑', wheat:'🌾', ore:'⛰️' };
 
 const s = {
-  wrap: { background:'#16213e', borderRadius:12, padding:12, display:'flex', flexDirection:'column', gap:6 },
-  title: { fontSize:13, fontWeight:700, color:'#aaa' },
-  card: (playable) => ({
-    padding:'7px 9px', background:'#0f3460', borderRadius:6,
+  wrap: { display:'flex', flexDirection:'column', gap:8 },
+  title: { fontSize:11, fontWeight:700, color:'#aaa' },
+  cardRow: (playable) => ({
+    display:'flex', gap:8, alignItems:'center',
+    padding:'5px 7px', background:'#0f3460', borderRadius:6,
     border: playable ? '2px solid #f1c40f' : '2px solid transparent',
     fontSize:11, cursor: playable ? 'pointer' : 'default',
-    opacity: playable ? 1 : 0.6,
+    opacity: playable ? 1 : 0.7,
+    transition: 'transform 0.1s',
   }),
+  cardImg: { width:38, height:54, objectFit:'contain', flexShrink:0 },
+  cardInfo: { flex:1, minWidth:0 },
+  cardName: { fontWeight:700, fontSize:11, lineHeight:1.2 },
   count: { fontSize:11, color:'#aaa' },
+  hint: { fontSize:9, marginTop:2 },
   resBtn: { padding:'10px 14px', background:'#0f3460', fontSize:14, margin:4, color:'#fff' },
+};
+
+const CARD_FILE = {
+  knight: 'card_dev_knight',
+  vp: 'card_dev_vp',
+  roadBuilding: 'card_dev_roadBuilding',
+  yearOfPlenty: 'card_dev_yearOfPlenty',
+  monopoly: 'card_dev_monopoly',
 };
 
 export default function DevCards({ player, isMyTurn, hasRolled, roomId, pendingAction, awaitingRobber }) {
@@ -82,14 +96,20 @@ export default function DevCards({ player, isMyTurn, hasRolled, roomId, pendingA
           if (type === 'yearOfPlenty' && canPlayYOP) onClick = () => setYopOpen(true);
           if (type === 'monopoly' && canPlayMono) onClick = () => setMonoOpen(true);
           return (
-            <div key={type} style={s.card(!!onClick)} onClick={onClick}>
-              <div style={{ fontWeight:700 }}>{N[type]} <span style={s.count}>×{info.count}</span></div>
-              {info.playable > 0 && type !== 'vp' && onClick && (
-                <div style={{ fontSize:10, color:'#f1c40f', marginTop:2 }}>▶ Play</div>
-              )}
-              {info.playable === 0 && info.count > 0 && type !== 'vp' && (
-                <div style={{ fontSize:10, color:'#666', marginTop:2 }}>Next turn</div>
-              )}
+            <div key={type} style={s.cardRow(!!onClick)} onClick={onClick}>
+              <img src={`/assets/cards/${CARD_FILE[type]}.png`} alt={N[type]} style={s.cardImg} />
+              <div style={s.cardInfo}>
+                <div style={s.cardName}>{N[type]} <span style={s.count}>×{info.count}</span></div>
+                {info.playable > 0 && type !== 'vp' && onClick && (
+                  <div style={{ ...s.hint, color:'#f1c40f' }}>▶ Play</div>
+                )}
+                {info.playable === 0 && info.count > 0 && type !== 'vp' && (
+                  <div style={{ ...s.hint, color:'#666' }}>Next turn</div>
+                )}
+                {type === 'vp' && (
+                  <div style={{ ...s.hint, color:'#f1c40f' }}>+1 VP</div>
+                )}
+              </div>
             </div>
           );
         })}

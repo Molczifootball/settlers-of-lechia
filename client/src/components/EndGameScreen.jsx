@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { T } from '../i18n';
+import { recordGameEnd, loadStats, avgScore, winRate } from '../stats';
 
 const COLOR_MAP = { red:'#e74c3c', blue:'#3498db', green:'#2ecc71', orange:'#f39c12' };
 
@@ -16,13 +17,26 @@ const s = {
   btn: { width:'100%', padding:12, marginTop:18, background:'#7b68ee', color:'#fff', fontSize:15 },
 };
 
-export default function EndGameScreen({ state }) {
+export default function EndGameScreen({ state, myId }) {
   if (!state.winner) return null;
   const sorted = [...state.players].sort((a, b) => b.victoryPoints - a.victoryPoints);
   const winner = sorted[0];
 
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    const me = state.players.find(p => p.id === myId);
+    if (!me) { setStats(loadStats()); return; }
+    const updated = recordGameEnd({
+      won: state.winner === myId,
+      score: me.victoryPoints,
+      knights: me.knightsPlayed || 0,
+      longestRoad: me.longestRoadLength || 0,
+    });
+    setStats(updated);
+  }, []);
+
   return (
-    <Modal>
+    <Modal variant="victory">
       <div style={s.hero}>{T.msgs.youWin.split(' ')[0]} {winner.name}!</div>
       <div style={s.scoreboard}>
         {sorted.map((p, i) => (
@@ -40,7 +54,17 @@ export default function EndGameScreen({ state }) {
           </div>
         ))}
       </div>
-      <button style={s.btn} onClick={() => location.reload()}>{T.msgs.backToLobby}</button>
+      {stats && stats.games > 0 && (
+        <div style={{ marginTop:14, padding:10, background:'#0f3460', borderRadius:8, fontSize:11 }}>
+          <div style={{ fontSize:12, color:'#aaa', marginBottom:6, fontWeight:700 }}>📈 {T.labels.statsTitle}</div>
+          <div style={{ display:'flex', gap:10, justifyContent:'space-between' }}>
+            <div>{T.labels.statsGames}: <b>{stats.games}</b></div>
+            <div>{T.labels.statsWins}: <b>{stats.wins}</b> ({winRate(stats)})</div>
+            <div>{T.labels.statsAvgScore}: <b>{avgScore(stats)}</b></div>
+          </div>
+        </div>
+      )}
+      <button style={s.btn} onClick={() => { window.location.href = window.location.pathname; }}>{T.msgs.backToLobby}</button>
     </Modal>
   );
 }

@@ -45,20 +45,30 @@ function hexCornerPositions(cx, cy) {
   });
 }
 
+// Returns true if the given token assignment has no two high-probability (6/8) tiles adjacent.
+function isValidTokenLayout(tokenTiles, assignments, adjacency) {
+  for (const tile of tokenTiles) {
+    const t = assignments[tile.id];
+    if (t !== 6 && t !== 8) continue;
+    for (const adjId of adjacency[tile.id] || []) {
+      const a = assignments[adjId];
+      if (a === 6 || a === 8) return false;
+    }
+  }
+  return true;
+}
+
 function generateBoard() {
   const tileResources = shuffle(TILE_DISTRIBUTION);
-  const numbers = shuffle(NUMBER_TOKENS);
-  let numIdx = 0;
 
   const tiles = [];
   HEX_LAYOUT.forEach((rowSize, row) => {
     for (let col = 0; col < rowSize; col++) {
       const resource = tileResources[tiles.length];
-      const token = resource === 'desert' ? null : numbers[numIdx++];
       const { x, y } = hexCenter(row, col);
       tiles.push({
         id: tiles.length,
-        resource, token, row, col,
+        resource, token: null, row, col,
         cx: x, cy: y,
         hasRobber: resource === 'desert',
         vertices: [], edges: [],
@@ -104,6 +114,28 @@ function generateBoard() {
       tile.edges.push(eid);
     }
   });
+
+  // Build tile-to-tile adjacency (two tiles are adjacent iff they share a vertex).
+  const tokenTiles = tiles.filter(t => t.resource !== 'desert');
+  const adjacency = {};
+  tokenTiles.forEach(t => {
+    const tVerts = new Set(t.vertices);
+    adjacency[t.id] = tokenTiles
+      .filter(o => o.id !== t.id && o.vertices.some(v => tVerts.has(v)))
+      .map(o => o.id);
+  });
+
+  // Find a token layout where no two 6/8 tiles touch. Re-shuffle until valid.
+  let assignments = {};
+  let found = false;
+  for (let attempt = 0; attempt < 500 && !found; attempt++) {
+    const numbers = shuffle(NUMBER_TOKENS);
+    assignments = {};
+    tokenTiles.forEach((t, i) => { assignments[t.id] = numbers[i]; });
+    if (isValidTokenLayout(tokenTiles, assignments, adjacency)) found = true;
+  }
+  // Apply
+  tokenTiles.forEach(t => { t.token = assignments[t.id]; });
 
   // Identify coastal vertices (those touching <3 tiles) and assign ports.
   const coastalVertices = vertices.filter(v => v.tiles.length < 3).map(v => v.id);

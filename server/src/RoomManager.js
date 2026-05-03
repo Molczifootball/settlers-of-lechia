@@ -39,16 +39,34 @@ function loadPersisted() {
 }
 loadPersisted();
 
-function createRoom(hostSocket, hostName) {
+function createRoom(hostSocket, hostName, opts = {}) {
   const roomId = uuidv4().slice(0, 6).toUpperCase();
   const room = {
     id: roomId, host: hostSocket.id,
     players: [{ id: hostSocket.id, name: hostName, isBot: false }],
     spectators: [], state: null, started: false,
+    isPublic: !!opts.isPublic,
+    createdAt: Date.now(),
   };
   rooms.set(roomId, room);
   persist();
   return room;
+}
+
+// Returns a snapshot of public rooms that haven't started yet (lobby list).
+function listPublicRooms() {
+  const out = [];
+  rooms.forEach(room => {
+    if (!room.isPublic || room.started) return;
+    out.push({
+      id: room.id,
+      hostName: room.players[0]?.name || '?',
+      playerCount: room.players.length,
+      createdAt: room.createdAt || 0,
+    });
+  });
+  // Newest first
+  return out.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 function joinRoom(roomId, socket, playerName) {
@@ -140,7 +158,10 @@ function handleRollDice(roomId, socketId) {
 
   const roll = rollDice();
   state.diceRoll = roll;
+  if (!state.rollHistory) state.rollHistory = [];
+  state.rollHistory.push(roll);
 
+  state.turnStart = Date.now(); // refresh timer when player has acted (rolled)
   if (roll === 7) {
     // Determine who needs to discard
     const mustDiscard = state.players
@@ -191,21 +212,23 @@ function handleDiscard(roomId, socketId, discarded) {
   return { state };
 }
 
-function handleEndTurn(roomId, socketId) {
+function handleEndTurn(roomId, socketId, opts = {}) {
   const room = rooms.get(roomId);
   if (!room?.state) return { error: 'No active game' };
   const state = room.state;
   if (state.phase !== 'main') return { error: 'Setup phase' };
   const cur = getCurrentPlayer(state);
-  if (cur.id !== socketId) return { error: 'Not your turn' };
-  if (state.diceRoll === null) return { error: 'Must roll first' };
-  if (state.pendingAction) return { error: 'Resolve pending action first' };
+  if (!opts.force && cur.id !== socketId) return { error: 'Not your turn' };
+  if (!opts.force && state.diceRoll === null) return { error: 'Must roll first' };
+  if (!opts.force && state.pendingAction) return { error: 'Resolve pending action first' };
 
   cur.devCards.forEach(c => { c.playable = true; });
   state.turn = (state.turn + 1) % state.players.length;
   state.diceRoll = null;
+  state.pendingAction = null; // clear forced
   if (state.turn === 0) state.round++;
-  state.log.unshift(`${cur.name} ended their turn`);
+  state.turnStart = Date.now();
+  state.log.unshift(opts.force ? `${cur.name}'s turn auto-ended (timeout)` : `${cur.name} ended their turn`);
   persist();
   return { state };
 }
@@ -486,6 +509,37 @@ function handleProposeTrade(roomId, socketId, { give, want, toPlayerId }) {
   return { state };
 }
 
+// Counter-offer: respond to a trade by proposing modified terms.
+// The original trade is replaced with the counter, target switched to the original initiator.
+function handleCounterTrade(roomId, socketId, { give, want }) {
+  const room = rooms.get(roomId);
+  if (!room?.state) return { error: 'No active game' };
+  const state = room.state;
+  const trade = state.activeTrade;
+  if (!trade) return { error: 'No active trade' };
+  if (!trade.targets.includes(socketId)) return { error: 'Not a trade target' };
+
+  const responder = state.players.find(p => p.id === socketId);
+  // Validate counter
+  for (const [r, n] of Object.entries(give)) {
+    if (n > 0 && (responder.resources[r] || 0) < n) return { error: `Insufficient ${r}` };
+  }
+  const totalGive = Object.values(give).reduce((a, b) => a + b, 0);
+  const totalWant = Object.values(want).reduce((a, b) => a + b, 0);
+  if (totalGive === 0 || totalWant === 0) return { error: 'Counter must give and want at least 1' };
+
+  state.activeTrade = {
+    from: socketId,
+    give, want,
+    targets: [trade.from], // counter goes back to original proposer
+    responses: {},
+    isCounter: true,
+  };
+  state.log.unshift(`${responder.name} countered ${state.players.find(p => p.id === trade.from)?.name}'s trade`);
+  persist();
+  return { state };
+}
+
 function handleRespondTrade(roomId, socketId, { accept }) {
   const room = rooms.get(roomId);
   if (!room?.state) return { error: 'No active game' };
@@ -570,6 +624,6 @@ module.exports = {
   createRoom, joinRoom, addBot, startGame,
   handleRollDice, handleDiscard, handleEndTurn, handleBuild,
   handleBuyDevCard, handlePlayDevCard, handleMoveRobber,
-  handleBankTrade, handleProposeTrade, handleRespondTrade, handleCancelTrade,
-  removePlayer, getRoom, listRooms, persist,
+  handleBankTrade, handleProposeTrade, handleRespondTrade, handleCancelTrade, handleCounterTrade,
+  removePlayer, getRoom, listRooms, listPublicRooms, persist,
 };

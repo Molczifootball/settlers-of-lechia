@@ -63,6 +63,7 @@ function createGameState(players) {
     longestRoadHolder: null,
     pendingAction: null,
     activeTrade: null,
+    rollHistory: [],
     log: [],
     winner: null,
   };

@@ -7,8 +7,8 @@ const RES = ['wood', 'brick', 'sheep', 'wheat', 'ore'];
 const ICONS = { wood:'🌲', brick:'🧱', sheep:'🐑', wheat:'🌾', ore:'⛰️' };
 
 const s = {
-  wrap: { background:'#16213e', borderRadius:12, padding:12, display:'flex', flexDirection:'column', gap:6 },
-  title: { fontSize:13, fontWeight:700, color:'#aaa' },
+  wrap: { display:'flex', flexDirection:'column', gap:6 },
+  title: { fontSize:11, fontWeight:700, color:'#aaa' },
   btn: (bg) => ({ padding:'8px', fontSize:12, background:bg, color:'#fff' }),
   section: { marginBottom:14 },
   label: { fontSize:13, color:'#aaa', marginBottom:6, fontWeight:600 },

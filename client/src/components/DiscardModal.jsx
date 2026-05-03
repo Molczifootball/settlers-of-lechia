@@ -38,7 +38,7 @@ export default function DiscardModal({ player, count, roomId }) {
   }
 
   return (
-    <Modal title={T.msgs.mustDiscard.replace('%d', count)}>
+    <Modal title={T.msgs.mustDiscard.replace('%d', count)} variant="danger">
       {RES.map(r => (
         <div key={r} style={s.resRow}>
           <div>{ICONS[r]}</div>

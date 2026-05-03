@@ -43,7 +43,7 @@ export function getEndTurnWarnings(player) {
 
 export default function EndTurnConfirm({ warnings, onConfirm, onCancel }) {
   return (
-    <Modal title={`⚠️ ${T.actions.endTurn}?`} onClose={onCancel}>
+    <Modal title={`⚠️ ${T.actions.endTurn}?`} onClose={onCancel} variant="warning">
       <div style={s.warn}>{T.msgs.endTurnWarn}</div>
       <ul style={s.list}>
         {warnings.map((w, i) => (

@@ -11,8 +11,8 @@ const COSTS = {
 const ICONS = { wood:'🌲', brick:'🧱', sheep:'🐑', wheat:'🌾', ore:'⛰️' };
 
 const s = {
-  wrap: { background:'#16213e', borderRadius:12, padding:14, display:'flex', flexDirection:'column', gap:8 },
-  title: { fontSize:13, fontWeight:700, color:'#aaa' },
+  wrap: { display:'flex', flexDirection:'column', gap:6 },
+  title: { fontSize:11, fontWeight:700, color:'#aaa' },
   btn: (active, disabled) => ({
     padding:'8px 10px',
     background: active ? '#7b68ee' : '#0f3460',
@@ -50,20 +50,30 @@ export default function BuildMenu({ player, isMyTurn, hasRolled, mode, setMode, 
         const affordable = freeRoadMode && b === 'road' ? true : canAfford(player, b);
         const enabled = (canBuild || (freeRoadMode && b === 'road')) && affordable;
         const active = mode === b;
+        const glow = enabled && !active && affordable;
         return (
-          <button key={b} style={s.btn(active, !enabled)} disabled={!enabled}
+          <button key={b}
+            className={glow ? 'afford-glow' : ''}
+            style={s.btn(active, !enabled)} disabled={!enabled}
             onClick={() => setMode(active ? null : b)}>
             <div style={{ fontWeight:700 }}>{T.buildings[b]}</div>
             <div style={s.cost}>{freeRoadMode && b === 'road' ? 'Free!' : costString(b)}</div>
           </button>
         );
       })}
-      <button style={s.btn(false, !canBuild || !canAfford(player, 'devCard'))}
-        disabled={!canBuild || !canAfford(player, 'devCard')}
-        onClick={onBuyDevCard}>
-        <div style={{ fontWeight:700 }}>🎴 {T.buildings.devCard}</div>
-        <div style={s.cost}>{costString('devCard')}</div>
-      </button>
+      {(() => {
+        const devEnabled = canBuild && canAfford(player, 'devCard');
+        return (
+          <button
+            className={devEnabled ? 'afford-glow' : ''}
+            style={s.btn(false, !devEnabled)}
+            disabled={!devEnabled}
+            onClick={onBuyDevCard}>
+            <div style={{ fontWeight:700 }}>🎴 {T.buildings.devCard}</div>
+            <div style={s.cost}>{costString('devCard')}</div>
+          </button>
+        );
+      })()}
       {mode && <button style={s.cancel} onClick={() => setMode(null)}>{T.actions.cancel}</button>}
     </div>
   );

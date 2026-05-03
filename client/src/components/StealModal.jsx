@@ -18,7 +18,7 @@ const s = {
 
 export default function StealModal({ candidates, onPick, onSkipSteal, onCancel }) {
   return (
-    <Modal title={T.msgs.stealFrom} onClose={onCancel}>
+    <Modal title={T.msgs.stealFrom} onClose={onCancel} variant="warning">
       <div style={s.list}>
         {candidates.length === 0 && <div style={{ color:'#aaa', fontSize:13 }}>{T.msgs.noOneToSteal}</div>}
         {candidates.map(p => (

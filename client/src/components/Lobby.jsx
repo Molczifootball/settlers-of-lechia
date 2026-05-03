@@ -4,7 +4,12 @@ import { T } from '../i18n';
 import SettingsModal from './SettingsModal';
 
 const s = {
-  wrap: { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', gap:24, padding:16 },
+  wrap: {
+    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+    minHeight:'100vh', gap:24, padding:16,
+    backgroundImage:'linear-gradient(rgba(26,26,46,0.65), rgba(26,26,46,0.85)), url("/assets/ui/bg_lobby.png")',
+    backgroundSize:'cover', backgroundPosition:'center',
+  },
   card: { background:'#16213e', borderRadius:16, padding:32, width:'100%', maxWidth:380, boxShadow:'0 8px 32px #0008' },
   title: { fontSize:26, fontWeight:800, marginBottom:4, letterSpacing:1, textAlign:'center' },
   subtitle: { color:'#aaa', fontSize:13, marginBottom:24, textAlign:'center' },
@@ -29,6 +34,30 @@ export default function Lobby({ onGameStart }) {
   const [isHost, setIsHost] = useState(false);
   const [error, setError] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
+  const [publicRooms, setPublicRooms] = useState([]);
+
+  // Read ?room=ABC123 from URL on first load and prefill
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if (roomParam) {
+      setJoinCode(roomParam.toUpperCase());
+      // If we already have a name, jump straight to join
+      if (playerName.trim()) {
+        setScreen('join');
+      }
+    }
+  }, []);
+
+  function copyInvite() {
+    const url = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  }
 
   function connect(cb) {
     if (!socket.connected) {
@@ -42,26 +71,48 @@ export default function Lobby({ onGameStart }) {
     setError('');
     localStorage.setItem('playerName', playerName.trim());
     connect(() => {
-      socket.emit('room:create', { playerName: playerName.trim() }, ({ roomId, players, error }) => {
+      socket.emit('room:create', { playerName: playerName.trim(), isPublic }, ({ roomId, players, error }) => {
         if (error) return setError(error);
         setRoomId(roomId); setPlayers(players); setIsHost(true); setScreen('waiting');
       });
     });
   }
 
-  function handleJoin() {
+  function fetchPublicRooms() {
+    connect(() => {
+      socket.emit('lobby:listPublic', {}, ({ rooms }) => {
+        setPublicRooms(rooms || []);
+      });
+    });
+  }
+
+  // Subscribe to public rooms list updates while on the join screen
+  useEffect(() => {
+    if (screen !== 'join') return;
+    const onUpdate = (rooms) => setPublicRooms(rooms || []);
+    socket.on('lobby:publicRooms', onUpdate);
+    fetchPublicRooms();
+    return () => socket.off('lobby:publicRooms', onUpdate);
+  }, [screen]);
+
+  function joinPublic(code) {
+    setJoinCode(code);
+    handleJoin(code);
+  }
+
+  function handleJoin(codeOverride) {
     if (!playerName.trim()) return setError('Enter your name');
-    if (!joinCode.trim()) return setError('Enter a room code');
+    const code = (codeOverride || joinCode).trim().toUpperCase();
+    if (!code) return setError('Enter a room code');
     setError('');
     localStorage.setItem('playerName', playerName.trim());
     connect(() => {
-      socket.emit('room:join', { roomId: joinCode.trim().toUpperCase(), playerName: playerName.trim() },
+      socket.emit('room:join', { roomId: code, playerName: playerName.trim() },
         ({ roomId: rid, players: pl, error: err, reconnected, spectator }) => {
           if (err) return setError(err);
           setRoomId(rid); setPlayers(pl);
           setIsHost(false);
           if (reconnected || spectator) {
-            // Will receive game:stateUpdate which onGameStart handles via App
             setScreen('joining-game');
           } else {
             setScreen('waiting');
@@ -125,6 +176,25 @@ export default function Lobby({ onGameStart }) {
       <div style={s.card}>
         <div style={s.title}>{T.actions.create}</div>
         <div style={s.subtitle}>Gracz: {playerName}</div>
+
+        <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+          <button
+            style={{ flex:1, padding:'10px', fontSize:13,
+              background: isPublic ? '#16a085' : '#0f3460',
+              color:'#fff', border:'2px solid '+(isPublic?'#1abc9c':'transparent') }}
+            onClick={() => setIsPublic(true)}>🌐 Public</button>
+          <button
+            style={{ flex:1, padding:'10px', fontSize:13,
+              background: !isPublic ? '#7b68ee' : '#0f3460',
+              color:'#fff', border:'2px solid '+(!isPublic?'#b0a0ff':'transparent') }}
+            onClick={() => setIsPublic(false)}>🔒 Private</button>
+        </div>
+        <div style={{ fontSize:11, color:'#888', textAlign:'center', marginBottom:10 }}>
+          {isPublic
+            ? 'Public rooms appear in the games list. Anyone can join with the code.'
+            : 'Private rooms only joinable with the room code or invite link.'}
+        </div>
+
         <button style={s.btn} onClick={handleCreate}>{T.actions.create}</button>
         <button style={s.btnSecondary} onClick={() => setScreen('home')}>{T.actions.back}</button>
         {error && <div style={s.error}>{error}</div>}
@@ -134,7 +204,7 @@ export default function Lobby({ onGameStart }) {
 
   if (screen === 'join') return (
     <div style={s.wrap}>
-      <div style={s.card}>
+      <div style={{ ...s.card, maxWidth:440 }}>
         <div style={s.title}>{T.actions.join}</div>
         <div style={s.subtitle}>Gracz: {playerName}</div>
         <div style={s.field}>
@@ -142,8 +212,34 @@ export default function Lobby({ onGameStart }) {
           <input value={joinCode} onChange={e => setJoinCode(e.target.value)}
             placeholder="ABC123" onKeyDown={e => e.key === 'Enter' && handleJoin()} autoFocus />
         </div>
-        <button style={s.btn} onClick={handleJoin}>{T.actions.join}</button>
-        <button style={s.btnSecondary} onClick={() => setScreen('home')}>{T.actions.back}</button>
+        <button style={s.btn} onClick={() => handleJoin()}>{T.actions.join}</button>
+
+        <div style={{ marginTop:18 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <span style={{ fontSize:12, color:'#aaa', fontWeight:700 }}>🌐 Public games ({publicRooms.length})</span>
+            <button style={{ padding:'4px 8px', background:'#0f3460', color:'#fff', fontSize:11 }}
+              onClick={fetchPublicRooms}>↻</button>
+          </div>
+          <div style={{ maxHeight:200, overflowY:'auto', display:'flex', flexDirection:'column', gap:4 }}>
+            {publicRooms.length === 0 && (
+              <div style={{ fontSize:11, color:'#666', textAlign:'center', padding:12 }}>
+                No public games right now. Create one!
+              </div>
+            )}
+            {publicRooms.map(r => (
+              <button key={r.id}
+                style={{ padding:'8px 10px', background:'#0f3460', color:'#fff',
+                  display:'flex', justifyContent:'space-between', alignItems:'center',
+                  fontSize:12, textAlign:'left' }}
+                onClick={() => joinPublic(r.id)}>
+                <span><b style={{ color:'#7b68ee' }}>{r.id}</b> · {r.hostName}'s game</span>
+                <span style={{ color:'#aaa' }}>{r.playerCount}/4 👥</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button style={{ ...s.btnSecondary, marginTop:14 }} onClick={() => setScreen('home')}>{T.actions.back}</button>
         {error && <div style={s.error}>{error}</div>}
       </div>
     </div>
@@ -162,8 +258,12 @@ export default function Lobby({ onGameStart }) {
     <div style={s.wrap}>
       <div style={s.card}>
         <div style={s.title}>{T.labels.players}</div>
-        <div style={s.subtitle}>Udostępnij kod znajomym:</div>
+        <div style={s.subtitle}>{T.msgs.shareCode || 'Share with friends:'}</div>
         <div style={s.roomCode}>{roomId}</div>
+        <button onClick={copyInvite}
+          style={{ width:'100%', padding:8, background: copied ? '#2ecc71' : '#0f3460', color:'#fff', fontSize:12, marginBottom:8 }}>
+          {copied ? '✓ Copied!' : '🔗 Copy invite link'}
+        </button>
         <ul style={s.playerList}>
           {players.map((p, i) => (
             <li key={p.id} style={s.playerItem}>

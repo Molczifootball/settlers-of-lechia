@@ -14,15 +14,31 @@ import EndGameScreen from './components/EndGameScreen';
 import ResourceCards from './components/ResourceCards';
 import SettingsModal from './components/SettingsModal';
 import ChatPanel from './components/ChatPanel';
+import Tabs from './components/Tabs';
+import ConnectionIndicator from './components/ConnectionIndicator';
+import RollsHistogram from './components/RollsHistogram';
+import TurnTimer from './components/TurnTimer';
+import Tutorial, { shouldShowTutorial } from './components/Tutorial';
+import ResourceFlash from './components/ResourceFlash';
+import TurnStartModal from './components/TurnStartModal';
 import { applySettingsToDOM } from './settings';
 import { playSound } from './sounds';
 import { T } from './i18n';
+import { useTurnNotification, useLeaveConfirm } from './hooks/useGameNotifications';
 
 const s = {
-  gameWrap: { display:'flex', gap:16, padding:16, minHeight:'100vh', alignItems:'flex-start', justifyContent:'center', flexWrap:'wrap' },
-  boardSection: { display:'flex', flexDirection:'column', alignItems:'center', gap:12 },
-  sideSection: { display:'flex', flexDirection:'column', gap:12, width:240 },
-  title: { fontSize:18, fontWeight:800, color:'#7b68ee', letterSpacing:1 },
+  outer: { display:'flex', flexDirection:'column' },
+  topbar: {
+    display:'flex', alignItems:'center', justifyContent:'space-between',
+    padding:'6px 16px', background:'#0f3460', borderBottom:'2px solid #1a2e54',
+    gap:12, flexShrink:0,
+  },
+  topbarTitle: { fontSize:16, fontWeight:800, color:'#7b68ee', letterSpacing:1 },
+  topbarRight: { display:'flex', gap:6, alignItems:'center' },
+  gameWrap: { display:'flex', gap:8, padding:8, flex:1, minHeight:0, justifyContent:'center' },
+  sideLeft: { display:'flex', flexDirection:'column', gap:8, width:240, flexShrink:0, minHeight:0 },
+  sideRight: { display:'flex', flexDirection:'column', gap:8, width:260, flexShrink:0, minHeight:0 },
+  boardSection: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, minHeight:0 },
   errBox: { padding:24, color:'#ff6b6b', fontFamily:'monospace', whiteSpace:'pre-wrap' },
 };
 
@@ -50,11 +66,17 @@ function GameView() {
   const [buildMode, setBuildMode] = useState(null);
   const [stealCtx, setStealCtx] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(shouldShowTutorial());
+  const [resourceFlash, setResourceFlash] = useState({ trigger: 0, resources: null });
+  const [activeTab, setActiveTab] = useState('build');
+  const [chatUnread, setChatUnread] = useState(0);
+  const [turnStartOpen, setTurnStartOpen] = useState(false);
 
   useEffect(() => { applySettingsToDOM(); }, []);
 
   // Detect changes in own piece counts to play sound on build
   const prevCounts = React.useRef({});
+  const prevResources = React.useRef(null);
   useEffect(() => {
     if (!gameState) return;
     const my = gameState.players?.find(p => p.id === socket.id);
@@ -71,6 +93,18 @@ function GameView() {
       else if (counts.d > prev.d) playSound('newCard');
     }
     prevCounts.current = counts;
+
+    // Resource gain flash — only when dice was rolled (not from trades, not from setup grant)
+    if (!my.resources?._hidden && prevResources.current && gameState.diceRoll && gameState.phase === 'main') {
+      const gained = {};
+      let any = false;
+      Object.keys(my.resources).forEach(r => {
+        const delta = (my.resources[r] || 0) - (prevResources.current[r] || 0);
+        if (delta > 0) { gained[r] = delta; any = true; }
+      });
+      if (any) setResourceFlash({ trigger: Date.now(), resources: gained });
+    }
+    if (!my.resources?._hidden) prevResources.current = { ...my.resources };
   }, [gameState]);
 
   // Win fanfare
@@ -91,6 +125,20 @@ function GameView() {
   const isMyTurn = !!(currentTurnPlayer && currentTurnPlayer.id === myId);
   const inSetup = !!(gameState && (gameState.phase === 'setup1' || gameState.phase === 'setup2'));
   const hasRolled = !!(gameState && gameState.diceRoll != null);
+
+  // Turn notification + leave-confirm hooks
+  useTurnNotification(isMyTurn, !!gameState && !gameState.winner);
+  useLeaveConfirm(!!gameState && !gameState.winner);
+
+  // Open the turn-start modal when my turn begins in main phase (before roll)
+  const prevIsMyTurn = React.useRef(false);
+  useEffect(() => {
+    const inMain = gameState && gameState.phase === 'main';
+    if (inMain && isMyTurn && !prevIsMyTurn.current && !hasRolled && !isSpectator) {
+      setTurnStartOpen(true);
+    }
+    prevIsMyTurn.current = isMyTurn;
+  }, [isMyTurn, gameState && gameState.phase, hasRolled, isSpectator]);
 
   const handleGameStart = useCallback((state, room, name) => {
     setGameState(state);
@@ -218,14 +266,20 @@ function GameView() {
   const fromPlayer = trade ? gameState.players.find(p => p.id === trade.from) : null;
 
   return (
-    <div style={s.gameWrap} className="game-wrap">
-      <div style={s.sideSection} className="side-section">
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <div style={s.title}>{T.title}</div>
+    <div style={s.outer} className="app-outer">
+      <div style={s.topbar}>
+        <img src="/assets/ui/logo_lechia.png" alt={T.title}
+          style={{ height: 44, width: 'auto', display: 'block' }} />
+        <div style={s.topbarRight}>
+          <ConnectionIndicator />
           <button onClick={() => setSettingsOpen(true)}
-            style={{ padding:'6px 10px', fontSize:14, background:'#0f3460', color:'#fff' }}
+            style={{ padding:'6px 10px', fontSize:14, background:'#1a2e54', color:'#fff' }}
             title={T.actions.settings}>⚙️</button>
         </div>
+      </div>
+      <div style={s.gameWrap} className="game-wrap">
+      <div style={s.sideLeft} className="side-section">
+        <TurnTimer turnStart={gameState.turnStart} isMyTurn={isMyTurn} inSetup={inSetup} />
         <PlayerPanel
           players={gameState.players}
           currentTurnIdx={gameState.turn}
@@ -233,6 +287,8 @@ function GameView() {
           largestArmyHolder={gameState.largestArmyHolder}
           longestRoadHolder={gameState.longestRoadHolder}
         />
+        {!inSetup && <RollsHistogram rolls={gameState.rollHistory} />}
+        <GameControls state={gameState} roomId={roomId} myId={myId} isSpectator={isSpectator} />
       </div>
 
       <div style={s.boardSection} className="board-section">
@@ -260,39 +316,58 @@ function GameView() {
         )}
       </div>
 
-      <div style={s.sideSection} className="side-section">
-        {!inSetup && !isSpectator && (
-          <BuildMenu
-            player={me}
-            isMyTurn={isMyTurn}
-            hasRolled={hasRolled}
-            mode={buildMode}
-            setMode={setBuildMode}
-            onBuyDevCard={buyDevCard}
-            pendingAction={gameState.pendingAction}
+      <div style={s.sideRight} className="side-section">
+        {!inSetup && !isSpectator ? (
+          <Tabs
+            active={activeTab}
+            onChange={setActiveTab}
+            tabs={[
+              { id:'build', label:'Build', icon:'🏗', content:
+                <BuildMenu
+                  player={me}
+                  isMyTurn={isMyTurn}
+                  hasRolled={hasRolled}
+                  mode={buildMode}
+                  setMode={setBuildMode}
+                  onBuyDevCard={buyDevCard}
+                  pendingAction={gameState.pendingAction}
+                />
+              },
+              { id:'trade', label:'Trade', icon:'🤝', content:
+                <TradePanel
+                  state={gameState}
+                  me={me}
+                  isMyTurn={isMyTurn}
+                  hasRolled={hasRolled}
+                  roomId={roomId}
+                />
+              },
+              { id:'dev', label:'Cards', icon:'🎴', content:
+                <DevCards
+                  player={me}
+                  isMyTurn={isMyTurn}
+                  hasRolled={hasRolled}
+                  roomId={roomId}
+                  pendingAction={gameState.pendingAction}
+                  awaitingRobber={awaitingRobber}
+                />
+              },
+              { id:'chat', label:'Chat', icon:'💬', badge: chatUnread, content:
+                <ChatPanel
+                  roomId={roomId}
+                  myName={myName}
+                  isActive={activeTab === 'chat'}
+                  onUnreadChange={setChatUnread}
+                />
+              },
+            ]}
           />
+        ) : (
+          <div style={{ background:'#16213e', borderRadius:10, padding:10, flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#aaa', marginBottom:6 }}>💬 {T.labels.chat}</div>
+            <ChatPanel roomId={roomId} myName={myName} isActive={true} onUnreadChange={() => {}} />
+          </div>
         )}
-        <GameControls state={gameState} roomId={roomId} myId={myId} isSpectator={isSpectator} />
-        {!inSetup && !isSpectator && (
-          <>
-            <TradePanel
-              state={gameState}
-              me={me}
-              isMyTurn={isMyTurn}
-              hasRolled={hasRolled}
-              roomId={roomId}
-            />
-            <DevCards
-              player={me}
-              isMyTurn={isMyTurn}
-              hasRolled={hasRolled}
-              roomId={roomId}
-              pendingAction={gameState.pendingAction}
-              awaitingRobber={awaitingRobber}
-            />
-          </>
-        )}
-        <ChatPanel roomId={roomId} myName={myName} />
       </div>
 
       {/* Modals */}
@@ -314,10 +389,25 @@ function GameView() {
           isInitiator={trade.from === myId}
           isTarget={trade.targets.includes(myId)}
           roomId={roomId}
+          me={me}
         />
       )}
-      {gameState.winner && <EndGameScreen state={gameState} />}
+      {gameState.winner && <EndGameScreen state={gameState} myId={myId} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {showTutorial && <Tutorial onClose={() => setShowTutorial(false)} />}
+      {turnStartOpen && me && (
+        <TurnStartModal
+          roomId={roomId}
+          hasPlayableKnight={
+            !!(me.devCards && !me.devCards._hidden &&
+               me.devCards.some && me.devCards.some(c => c.type === 'knight' && c.playable))
+          }
+          awaitingRobber={awaitingRobber}
+          onClose={() => setTurnStartOpen(false)}
+        />
+      )}
+      <ResourceFlash trigger={resourceFlash.trigger} resources={resourceFlash.resources} />
+      </div>
     </div>
   );
 }
