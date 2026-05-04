@@ -38,7 +38,13 @@ const s = {
   gameWrap: { display:'flex', gap:8, padding:8, flex:1, minHeight:0, justifyContent:'center' },
   sideLeft: { display:'flex', flexDirection:'column', gap:8, width:240, flexShrink:0, minHeight:0 },
   sideRight: { display:'flex', flexDirection:'column', gap:8, width:260, flexShrink:0, minHeight:0 },
-  boardSection: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, minHeight:0 },
+  boardSection: {
+    flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+    gap:6, minHeight:0,
+    backgroundImage: 'url("/assets/ui/bg_board_water.png")',
+    backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+    borderRadius: 8,
+  },
   errBox: { padding:24, color:'#ff6b6b', fontFamily:'monospace', whiteSpace:'pre-wrap' },
 };
 

@@ -171,7 +171,7 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
       style={{
-        background:'#0a1733', borderRadius:8, display:'block',
+        background:'transparent', display:'block',
         width: '100%', height: '100%',
         maxWidth: '100%', maxHeight: '100%',
         cursor: dragRef.current?.moved ? 'grabbing' : (canPan ? 'grab' : 'default'),
@@ -190,10 +190,7 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
           </clipPath>
         ))}
       </defs>
-      <image href="/assets/ui/bg_board_water.png"
-        x={0} y={0} width={svgWidth} height={svgHeight}
-        preserveAspectRatio="xMidYMid slice"
-        pointerEvents="none" />
+      {/* Ocean backdrop is now applied via CSS background on the parent boardSection */}
       <g transform={isoMode ? isoTransform : ''}
          filter={isoMode ? 'url(#boardShadow)' : undefined}>
 
