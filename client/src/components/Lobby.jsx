@@ -78,6 +78,29 @@ export default function Lobby({ onGameStart }) {
     });
   }
 
+  function handleQuickGame() {
+    if (!playerName.trim()) return setError('Enter your name');
+    setError('');
+    localStorage.setItem('playerName', playerName.trim());
+    connect(() => {
+      socket.emit('room:create', { playerName: playerName.trim(), isPublic: false }, ({ roomId: rid, error }) => {
+        if (error) return setError(error);
+        // Sync state so the 'game:started' listener has the correct roomId in closure
+        setRoomId(rid);
+        setIsHost(true);
+        // Add two bots, then start
+        socket.emit('room:addBot', { roomId: rid }, () => {
+          socket.emit('room:addBot', { roomId: rid }, () => {
+            socket.emit('game:start', { roomId: rid }, ({ error: startErr }) => {
+              if (startErr) setError(startErr);
+              // Otherwise the 'game:started' listener will transition us into the game
+            });
+          });
+        });
+      });
+    });
+  }
+
   function fetchPublicRooms() {
     connect(() => {
       socket.emit('lobby:listPublic', {}, ({ rooms }) => {
@@ -131,7 +154,9 @@ export default function Lobby({ onGameStart }) {
 
   useEffect(() => {
     const onUpdated = ({ players }) => setPlayers(players);
-    const onStarted = ({ state }) => onGameStart(state, roomId, playerName.trim());
+    // Prefer roomId from broadcast (handles quick-game race where local state lags)
+    const onStarted = ({ state, roomId: serverRoomId }) =>
+      onGameStart(state, serverRoomId || roomId, playerName.trim());
     const onStateUpdate = ({ state }) => onGameStart(state, roomId, playerName.trim());
     socket.on('room:updated', onUpdated);
     socket.on('game:started', onStarted);
@@ -159,10 +184,13 @@ export default function Lobby({ onGameStart }) {
           <input value={playerName} onChange={e => setPlayerName(e.target.value)}
             placeholder="Imię" autoFocus />
         </div>
+        <button style={{ ...s.btn, background:'#f39c12', fontSize:15, padding:14 }} onClick={handleQuickGame}>
+          ⚡ {T.actions.quickGame || 'Quick Game (vs 2 bots)'}
+        </button>
+        <div style={s.divider}>{T.labels.or}</div>
         <button style={s.btn} onClick={() => { if (!playerName.trim()) return setError('Enter your name'); setError(''); setScreen('create'); }}>
           {T.actions.create}
         </button>
-        <div style={s.divider}>{T.labels.or}</div>
         <button style={s.btnSecondary} onClick={() => { if (!playerName.trim()) return setError('Enter your name'); setError(''); setScreen('join'); }}>
           {T.actions.join}
         </button>

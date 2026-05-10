@@ -5,6 +5,29 @@ import { useSettings } from '../settings';
 
 // Probability dots for each token (out of 36 dice rolls)
 const TOKEN_PROB = { 2:'1/36', 3:'2/36', 4:'3/36', 5:'4/36', 6:'5/36', 8:'5/36', 9:'4/36', 10:'3/36', 11:'2/36', 12:'1/36' };
+const TOKEN_DOTS = { 2:1, 3:2, 4:3, 5:4, 6:5, 8:5, 9:4, 10:3, 11:2, 12:1 };
+
+// Color thresholds for placement quality.
+// Note: with our "6 and 8 cannot be adjacent" rule, a 3-tile vertex maxes out
+// at 13 dots (one 6/8 + two 4-dot tiles). So the practical scale is:
+//   1st place  = 13 dots (EXCELLENT)
+//   2nd-3rd    = 11-12 (STRONG)
+//   4th-5th    = 9-10 (OK)
+//   6th-7th    = 7-8 (DECENT)
+//   below that = WEAK
+// Edge vertices (1 or 2 adjacent tiles) use a separate harsher scale.
+function qualityColor(dots, tileCount) {
+  if (tileCount < 3) {
+    if (dots >= 8) return { fill:'#f1c40f', label:'EDGE — OK' };
+    if (dots >= 4) return { fill:'#e67e22', label:'EDGE — WEAK' };
+    return { fill:'#e74c3c', label:'EDGE — POOR' };
+  }
+  if (dots >= 13) return { fill:'#2ecc71', label:'EXCELLENT' };  // top: 5+4+4 (e.g. 6,5,9)
+  if (dots >= 11) return { fill:'#7ec850', label:'STRONG' };     // 2nd-3rd
+  if (dots >= 9)  return { fill:'#f1c40f', label:'OK' };          // 4th-5th
+  if (dots >= 7)  return { fill:'#f39c12', label:'DECENT' };
+  return { fill:'#e67e22', label:'WEAK' };
+}
 
 function tileTooltip(tile, isRobber) {
   const resName = RES_NAMES[tile.resource] || tile.resource;
@@ -122,6 +145,10 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
+  // Hover-preview: highlight all tiles with the same number when one is hovered
+  const [hoverNumber, setHoverNumber] = useState(null);
+  // Placement-quality preview: which vertex spot is the cursor over?
+  const [hoverVertex, setHoverVertex] = useState(null);
 
   const vbW = svgWidth / zoom;
   const vbH = svgHeight / zoom;
@@ -233,20 +260,29 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
           <polygon
             points={hexPoints(cx, cy, HEX_SIZE - 2)}
             fill="transparent"
-            stroke={tileClickable ? '#fff' : '#1a1a2e'}
-            strokeWidth={tileClickable ? 3 : 2}
+            stroke={tileClickable ? '#fff'
+                  : (hoverNumber !== null && tile.token === hoverNumber) ? '#f1c40f'
+                  : '#1a1a2e'}
+            strokeWidth={tileClickable ? 3
+                  : (hoverNumber !== null && tile.token === hoverNumber) ? 4
+                  : 2}
             className="hex-tile"
           />
           {tile.token && (
-            <>
-              <circle cx={cx} cy={cy + 14} r={13} fill="#f5e6c8" stroke="#0a1733" strokeWidth={1} pointerEvents="none" />
+            <g
+              style={{ cursor: 'help' }}
+              onMouseEnter={() => setHoverNumber(tile.token)}
+              onMouseLeave={() => setHoverNumber(null)}>
+              <circle cx={cx} cy={cy + 14} r={13}
+                fill={hoverNumber === tile.token ? '#f1c40f' : '#f5e6c8'}
+                stroke="#0a1733" strokeWidth={1} />
               <text x={cx} y={cy + 19} textAnchor="middle"
                 fontSize={13} fontWeight="bold"
                 fill={tile.token === 6 || tile.token === 8 ? '#c0392b' : '#222'}
                 style={{ userSelect:'none', pointerEvents:'none' }}>
                 {tile.token}
               </text>
-            </>
+            </g>
           )}
           {tile.id === state.robberTile && (
             <image href="/assets/tokens/token_robber.png"
@@ -330,13 +366,19 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
         if (owner) {
           const interactive = cityUpgradeable;
           const handler = interactive ? () => onVertexClick?.(v.id) : undefined;
+          const onEnter = interactive ? () => setHoverVertex(v.id) : undefined;
+          const onLeave = interactive ? () => setHoverVertex(null) : undefined;
           const cursor = interactive ? 'pointer' : 'default';
           const baseColor = COLOR_MAP[owner.color];
           const sideColor = darken(baseColor, 0.6);
           let piece;
           if (owner.kind === 'settlement') {
             piece = (
-              <g style={{ cursor }} onClick={handler} pointerEvents={interactive ? 'auto' : 'none'} className="placed-piece">
+              <g style={{ cursor }}
+                 onClick={handler}
+                 onMouseEnter={onEnter}
+                 onMouseLeave={onLeave}
+                 pointerEvents={interactive ? 'auto' : 'none'} className="placed-piece">
                 {isoMode && (
                   <polygon
                     points={`${x-8},${y+6} ${x-8},${y+6+lift} ${x+8},${y+6+lift} ${x+8},${y+6}`}
@@ -360,11 +402,18 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
               </g>
             );
           }
+          // For city upgrade rings, color by quality (with 2x city multiplier)
+          let cityQ = null;
+          if (cityUpgradeable) {
+            const adjTiles = (v.tiles || []).map(tid => tiles[tid]).filter(Boolean);
+            const dots = adjTiles.reduce((acc, t) => acc + (t.token ? (TOKEN_DOTS[t.token] || 0) : 0), 0) * 2;
+            cityQ = qualityColor(dots, adjTiles.length);
+          }
           return (
             <g key={`v${v.id}`}>
               {cityUpgradeable && (
                 <circle cx={x} cy={y} r={14}
-                  fill="none" stroke="#f1c40f" strokeWidth={3}
+                  fill="none" stroke={cityQ.fill} strokeWidth={3}
                   className="build-spot" pointerEvents="none" />
               )}
               {piece}
@@ -372,15 +421,73 @@ export default function HexBoard({ state, mode, myPlayer, onTileClick, onVertexC
           );
         }
         if (showSettlementSpots && validVertices.has(v.id)) {
+          // Color this placement ring by the same quality scale as the hover tooltip
+          const adjTiles = (v.tiles || []).map(tid => tiles[tid]).filter(Boolean);
+          const dots = adjTiles.reduce((acc, t) => acc + (t.token ? (TOKEN_DOTS[t.token] || 0) : 0), 0);
+          const q = qualityColor(dots, adjTiles.length);
           return (
             <circle key={`v${v.id}`} cx={x} cy={y} r={8}
-              fill="rgba(255,255,255,0.15)" stroke="#f1c40f" strokeWidth={2.5}
+              fill={`${q.fill}33`}
+              stroke={q.fill} strokeWidth={3}
               style={{ cursor:'pointer' }} className="build-spot"
+              onMouseEnter={() => setHoverVertex(v.id)}
+              onMouseLeave={() => setHoverVertex(null)}
               onClick={() => onVertexClick?.(v.id)} />
           );
         }
         return null;
       })}
+
+      {/* Placement-quality tooltip — for settlement spots and city upgrades */}
+      {(showSettlementSpots || showCitySpots) && hoverVertex !== null && (() => {
+        const isCity = showCitySpots;
+        const multiplier = isCity ? 2 : 1;
+        const v = vertices[hoverVertex];
+        if (!v) return null;
+        const adjTiles = (v.tiles || []).map(tid => tiles[tid]).filter(Boolean);
+        const breakdown = adjTiles.map(t => ({
+          resource: t.resource,
+          token: t.token,
+          dots: t.token ? (TOKEN_DOTS[t.token] || 0) : 0,
+        }));
+        const baseDots = breakdown.reduce((a, b) => a + b.dots, 0);
+        const totalDots = baseDots * multiplier;
+        const pct = ((totalDots / 36) * 100).toFixed(1);
+        const q = qualityColor(totalDots, adjTiles.length);
+        const x = v.x + offsetX;
+        const y = v.y + offsetY;
+        // Position above the vertex; flip below if near top edge
+        const above = y > 80;
+        const ttX = x;
+        const ttY = above ? y - 75 : y + 50;
+        const w = 140, h = 60;
+        return (
+          <g pointerEvents="none">
+            <rect x={ttX - w/2} y={ttY - h/2} width={w} height={h}
+              rx={6} fill="#0a1733ee" stroke={q.fill} strokeWidth={2} />
+            <text x={ttX} y={ttY - 14} textAnchor="middle" fontSize={11} fill="#eee">
+              {breakdown.map((b, i) => (
+                <tspan key={i} dx={i === 0 ? 0 : 6}>
+                  {RESOURCE_ICONS[b.resource]}
+                  {b.token ? ` ${b.token}` : ''}
+                </tspan>
+              ))}
+            </text>
+            <text x={ttX} y={ttY + 4} textAnchor="middle" fontSize={13} fontWeight="bold" fill={q.fill}>
+              {totalDots} dots · {pct}%/roll
+            </text>
+            <text x={ttX} y={ttY + 20} textAnchor="middle" fontSize={10} fill={q.fill} opacity={0.85}>
+              {q.label}{isCity ? ' (city ×2)' : ''}
+            </text>
+            {/* Pointer triangle from box → vertex */}
+            <polygon
+              points={above
+                ? `${ttX - 6},${ttY + h/2} ${ttX + 6},${ttY + h/2} ${ttX},${ttY + h/2 + 8}`
+                : `${ttX - 6},${ttY - h/2} ${ttX + 6},${ttY - h/2} ${ttX},${ttY - h/2 - 8}`}
+              fill="#0a1733ee" stroke={q.fill} strokeWidth={2} />
+          </g>
+        );
+      })()}
       </g>
     </svg>
     <div style={{

@@ -4,21 +4,21 @@ import { T } from '../i18n';
 const KEY = 'lechia_tutorial_seen';
 
 const STEPS_PL = [
-  { title: '👋 Witaj w Osadnikach z Lechii!', text: 'To gra strategiczna inspirowana Catanem. Cel: zdobyć 10 punktów zwycięstwa.' },
-  { title: '🏠 Przygotowanie', text: 'Każdy gracz stawia 2 osady i 2 trakty. Wybieraj wierzchołki blisko pól z kostkami 6 lub 8 — produkują najwięcej.' },
-  { title: '🎲 Tura', text: 'Rzuć kośćmi — pola z taką liczbą produkują surowce. Następnie buduj, handluj, kup karty rozwoju.' },
-  { title: '🦹 Zbójca', text: 'Wyrzucenie 7 przesuwa zbójcę i blokuje pole. Gracze z >7 kart muszą odrzucić połowę.' },
-  { title: '🛤 Najdłuższy Trakt / ⚔️ Największa Armia', text: 'Bonusy +2 punkty. Można je przejąć tylko ŚCIŚLE bijąc liczbę poprzedniego posiadacza.' },
-  { title: '⭐ Punkty Zwycięstwa', text: 'Osada=1, Gród=2, karty PZ ukryte=1 każda. Pierwszy do 10 wygrywa!' },
+  { title: '👋 Witaj na Bursztynowym Szlaku!', text: 'Wieloosobowa gra strategiczna o handlu i osadnictwie w średniowiecznej Lechii. Cel: zdobyć 10 punktów zwycięstwa jako pierwszy.' },
+  { title: '🏠 Przygotowanie', text: 'Każdy gracz stawia 2 osady i 2 szlaki. Wybieraj wierzchołki blisko pól z kostkami 6 lub 8 — produkują najwięcej.' },
+  { title: '🎲 Tura', text: 'Rzuć kośćmi — pola z taką liczbą produkują surowce. Następnie buduj, handluj, kup Karty Rozwoju.' },
+  { title: '🦹 Zbójca', text: 'Wyrzucenie 7 przenosi zbójcę i blokuje pole. Gracze z >7 kart muszą odrzucić połowę.' },
+  { title: '🛤 Najdłuższy Szlak / ⚔️ Najpotężniejsza Husaria', text: 'Bonusy +2 punkty. Można je przejąć tylko ŚCIŚLE bijąc liczbę poprzedniego posiadacza.' },
+  { title: '⭐ Punkty Zwycięstwa', text: 'Osada=1, Gród=2, ukryte karty PZ=1 każda. Pierwszy do 10 wygrywa!' },
 ];
 
 const STEPS_EN = [
-  { title: '👋 Welcome to Settlers of Lechia!', text: 'A Catan-inspired strategy game. Goal: reach 10 victory points first.' },
-  { title: '🏠 Setup', text: 'Each player places 2 settlements and 2 roads. Pick vertices next to high-probability tiles (6 and 8 are best).' },
-  { title: '🎲 Turn', text: 'Roll dice — tiles with that number produce resources. Then build, trade, or buy dev cards.' },
-  { title: '🦹 Robber', text: 'Rolling 7 moves the robber and blocks a tile. Players with 8+ cards must discard half.' },
-  { title: '🛤 Longest Road / ⚔️ Largest Army', text: 'Each is worth +2 VP. You can only steal them by STRICTLY beating the holder\'s count.' },
-  { title: '⭐ Victory Points', text: 'Settlement=1, City=2, hidden VP cards=1 each. First to 10 wins!' },
+  { title: '👋 Welcome to The Amber Trail!', text: 'A multiplayer strategy game of trade, exploration, and settlement in medieval Lechia. Goal: reach 10 honor points first.' },
+  { title: '🏠 Setup', text: 'Each player places 2 hamlets and 2 trails. Pick vertices next to high-probability tiles (6 and 8 are best).' },
+  { title: '🎲 Turn', text: 'Roll dice — tiles with that number produce resources. Then build, trade, or buy Decree Cards.' },
+  { title: '🦹 The Robber', text: 'Rolling 7 moves the robber and blocks a tile. Players with 8+ cards must discard half.' },
+  { title: '🛤 Longest Trail / ⚔️ Greatest Hussar Banner', text: 'Each is worth +2 honor. You can only steal them by STRICTLY beating the holder\'s count.' },
+  { title: '⭐ Honor Points', text: 'Hamlet=1, Stronghold=2, hidden Honor cards=1 each. First to 10 wins!' },
 ];
 
 const s = {
@@ -37,7 +37,8 @@ const s = {
 
 export default function Tutorial({ onClose }) {
   const [step, setStep] = useState(0);
-  const steps = T.title.includes('Lechii') ? STEPS_PL : STEPS_EN;
+  // PL title is "Bursztynowy Szlak", EN is "The Amber Trail" — detect by Polish-specific char
+  const steps = T.title.includes('Szlak') ? STEPS_PL : STEPS_EN;
 
   function dismiss() {
     localStorage.setItem(KEY, '1');

@@ -136,6 +136,41 @@ function GameView() {
   useTurnNotification(isMyTurn, !!gameState && !gameState.winner);
   useLeaveConfirm(!!gameState && !gameState.winner);
 
+  // Keyboard shortcuts: R roll, E end turn, Esc dismiss build mode/modals, 1-4 switch tabs
+  useEffect(() => {
+    function handler(e) {
+      // Skip if user is typing in an input or modal is open
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+      if (!gameState || isSpectator) return;
+
+      const hasRolledNow = !!gameState.diceRoll;
+      const inMain = gameState.phase === 'main';
+
+      if (e.key === 'r' || e.key === 'R') {
+        if (isMyTurn && inMain && !hasRolledNow && !gameState.pendingAction) {
+          socket.emit('game:rollDice', { roomId }, (res) => { if (res?.error) console.warn(res.error); });
+          e.preventDefault();
+        }
+      } else if (e.key === 'e' || e.key === 'E') {
+        if (isMyTurn && inMain && hasRolledNow && !gameState.pendingAction) {
+          socket.emit('game:endTurn', { roomId }, (res) => { if (res?.error) console.warn(res.error); });
+          e.preventDefault();
+        }
+      } else if (e.key === 'Escape') {
+        if (buildMode) { setBuildMode(null); e.preventDefault(); }
+        else if (stealCtx) { setStealCtx(null); e.preventDefault(); }
+        else if (settingsOpen) { setSettingsOpen(false); e.preventDefault(); }
+      } else if (['1','2','3','4'].includes(e.key)) {
+        const tabs = ['build', 'trade', 'dev', 'chat'];
+        setActiveTab(tabs[parseInt(e.key, 10) - 1]);
+        e.preventDefault();
+      }
+    }
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [gameState, isMyTurn, isSpectator, roomId, buildMode, stealCtx, settingsOpen]);
+
   // Open the turn-start modal when my turn begins in main phase (before roll)
   const prevIsMyTurn = React.useRef(false);
   useEffect(() => {
@@ -274,8 +309,19 @@ function GameView() {
   return (
     <div style={s.outer} className="app-outer">
       <div style={s.topbar}>
-        <img src="/assets/ui/logo_lechia.png" alt={T.title}
-          style={{ height: 44, width: 'auto', display: 'block' }} />
+        <div style={{
+          fontFamily: 'Georgia, serif',
+          fontSize: 22, fontWeight: 800, letterSpacing: 2,
+          color: '#f1c40f',
+          textShadow: '0 2px 4px rgba(0,0,0,0.6)',
+          padding: '4px 14px',
+          background: 'linear-gradient(180deg, #4a2f17 0%, #2d1b0e 100%)',
+          border: '2px solid #8b6914',
+          borderRadius: 6,
+          boxShadow: 'inset 0 1px 0 rgba(255,220,150,0.2), 0 2px 6px rgba(0,0,0,0.4)',
+        }}>
+          🟡 {T.title}
+        </div>
         <div style={s.topbarRight}>
           <ConnectionIndicator />
           <button onClick={() => setSettingsOpen(true)}

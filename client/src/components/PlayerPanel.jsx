@@ -63,8 +63,16 @@ export default function PlayerPanel({ players, currentTurnIdx, myId, largestArmy
               <Tooltip text={isMe ? T.buildings.devCard : 'Hidden'}><span>🎴 {totalDev}</span></Tooltip>
               <Tooltip text={T.labels.knights}><span>⚔️ {knightsPlayed}</span></Tooltip>
               <Tooltip text={isMe ? T.labels.yourHand : 'Resource cards'}><span>📦 {totalRes}</span></Tooltip>
-              {player.id === largestArmyHolder && <Tooltip text={T.labels.largestArmy}><span style={{ color:'#f1c40f' }}>👑</span></Tooltip>}
-              {player.id === longestRoadHolder && <Tooltip text={`${T.labels.longestRoad} (${player.longestRoadLength || 0})`}><span style={{ color:'#f1c40f' }}>🛣</span></Tooltip>}
+              {player.id === largestArmyHolder && (
+                <Tooltip text={`${T.labels.largestArmy} • ${knightsPlayed} ⚔️ • +2 VP`}>
+                  <span style={{ color:'#f1c40f' }}>👑</span>
+                </Tooltip>
+              )}
+              {player.id === longestRoadHolder && (
+                <Tooltip text={`${T.labels.longestRoad} • ${player.longestRoadLength || 0} segments • +2 VP`}>
+                  <span style={{ color:'#f1c40f' }}>🛣</span>
+                </Tooltip>
+              )}
             </div>
           </div>
         );

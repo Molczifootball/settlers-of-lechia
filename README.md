@@ -1,15 +1,21 @@
-# Osadnicy z Lechii (Settlers of Lechia)
+# The Amber Trail (Bursztynowy Szlak)
 
-A Catan-inspired multiplayer strategy game with a Polish/Lechia medieval theme.
+A multiplayer strategy game of trade, exploration, and settlement set in
+medieval Lechia. Players gather resources from a hex-grid map, build
+hamlets and strongholds along ancient trails, and trade with one another
+or with port towns to reach victory.
+
+Independent project inspired by classic trade-and-build board games of the
+1990s. Original art and code; no affiliation with any commercial publisher.
 
 **Stack:** Node.js + Socket.io · React + Vite · Web Audio API · localStorage settings
 
-## Features (v0.1)
+## Features
 
 - 2–4 players online (real-time via WebSockets)
 - Authoritative server-side state — no client cheating possible
-- Full Catan ruleset: settlements, cities, roads, dev cards, robber, ports, trading
-- Largest Army & Longest Road tracking with proper tie rules
+- Full ruleset: hamlets, strongholds, trails, decree cards, robber, ports, trading
+- Greatest Hussar Banner & Longest Trail tracking with proper tie rules
 - AI bots with strategic heuristics (probability scoring, dev card use, trade response)
 - Discard-on-7, hidden VP cards, color-blind mode
 - Player-to-player chat

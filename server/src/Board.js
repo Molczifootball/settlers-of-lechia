@@ -137,28 +137,35 @@ function generateBoard() {
   // Apply
   tokenTiles.forEach(t => { t.token = assignments[t.id]; });
 
-  // Identify coastal vertices (those touching <3 tiles) and assign ports.
-  const coastalVertices = vertices.filter(v => v.tiles.length < 3).map(v => v.id);
-  // Pick 9 well-spaced coastal vertex pairs for ports (simplified: sample pairs)
+  // Identify true coastal edges: edges that belong to exactly 1 tile.
+  // A port sits on such an edge so its 2 vertices are settlements that
+  // border the ocean side of one specific tile.
+  const edgeTileCount = {};
+  tiles.forEach(t => t.edges.forEach(eid => {
+    edgeTileCount[eid] = (edgeTileCount[eid] || 0) + 1;
+  }));
+  // Eligible: coastal edge AND at least one endpoint touches >= 2 tiles
+  // (avoids dangling single-tile corner ports that look detached).
+  const eligibleEdges = edges.filter(e => {
+    if (edgeTileCount[e.id] !== 1) return false;
+    const v1 = vertices[e.v1], v2 = vertices[e.v2];
+    return v1.tiles.length >= 2 || v2.tiles.length >= 2;
+  });
+
+  // Shuffle for randomness (was previously sorted by angle — too regular).
+  const shuffledEdges = shuffle(eligibleEdges);
   const portTypes = shuffle(PORT_TYPES);
   const ports = [];
   const usedVertices = new Set();
-  // Sort coastal by angle from center for even spread
-  const cx = 280, cy = 240;
-  const sorted = coastalVertices.slice().sort((a, b) => {
-    const va = vertices[a], vb = vertices[b];
-    return Math.atan2(va.y - cy, va.x - cx) - Math.atan2(vb.y - cy, vb.x - cx);
-  });
   let portIdx = 0;
-  for (let i = 0; i < sorted.length && portIdx < 9; i += 2) {
-    const v1 = sorted[i];
-    const v2 = sorted[(i + 1) % sorted.length];
-    if (usedVertices.has(v1) || usedVertices.has(v2)) continue;
+  for (const edge of shuffledEdges) {
+    if (portIdx >= 9) break;
+    if (usedVertices.has(edge.v1) || usedVertices.has(edge.v2)) continue;
     const type = portTypes[portIdx++];
-    ports.push({ vertices: [v1, v2], type });
-    vertices[v1].port = type;
-    vertices[v2].port = type;
-    usedVertices.add(v1); usedVertices.add(v2);
+    ports.push({ vertices: [edge.v1, edge.v2], type });
+    vertices[edge.v1].port = type;
+    vertices[edge.v2].port = type;
+    usedVertices.add(edge.v1); usedVertices.add(edge.v2);
   }
 
   return { tiles, vertices, edges, ports };

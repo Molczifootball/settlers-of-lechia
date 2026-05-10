@@ -188,11 +188,10 @@ io.on('connection', (socket) => {
     const r = RM.startGame(roomId, socket.id);
     if (r.error) return cb({ error: r.error });
     io.in(roomId).fetchSockets().then(sockets => {
-      sockets.forEach(s => s.emit('game:started', { state: sanitizeFor(r.room.state, s.id) }));
+      sockets.forEach(s => s.emit('game:started', { state: sanitizeFor(r.room.state, s.id), roomId }));
     });
     cb({ ok: true });
     driveBots(roomId);
-    // Started rooms drop off the public list
     io.emit('lobby:publicRooms', RM.listPublicRooms());
   });
 

@@ -96,10 +96,12 @@ export default function GameControls({ state, roomId, myId, isSpectator }) {
       {!inSetup && (
         <>
           <div style={s.primaryRow}>
-            <button style={s.rollBtn(isMyTurn, hasRolled)} onClick={rollDice} disabled={!canRoll}>
+            <button style={s.rollBtn(isMyTurn, hasRolled)} onClick={rollDice} disabled={!canRoll}
+              title="Shortcut: R">
               🎲 {T.actions.rollDice}
             </button>
-            <button style={s.endBtn(isMyTurn, hasRolled && !state.pendingAction)} onClick={endTurn} disabled={!canEndTurn}>
+            <button style={s.endBtn(isMyTurn, hasRolled && !state.pendingAction)} onClick={endTurn} disabled={!canEndTurn}
+              title="Shortcut: E">
               ✓ {T.actions.endTurn}
             </button>
           </div>
